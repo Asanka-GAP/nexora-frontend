@@ -1,82 +1,314 @@
 "use client";
-import { useCallback, useMemo } from "react";
-import { Calendar, Clock } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { toast } from "sonner";
+import { Calendar, XCircle, RotateCcw, CheckCircle, Clock, BarChart3, AlertTriangle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import AppShell from "@/components/layout/AppShell";
-import EmptyState from "@/components/shared/EmptyState";
-import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useFetch } from "@/hooks/useFetch";
-import { getSchedules, getClasses } from "@/services/api";
-import { DAYS } from "@/lib/utils";
-import type { Schedule, ClassItem } from "@/lib/types";
+import { getSchedules, cancelSchedule, reactivateSchedule } from "@/services/api";
+import type { Schedule } from "@/lib/types";
+
+type StatusFilter = "ALL" | "UPCOMING" | "COMPLETED" | "CANCELLED";
+const STATUSES: { id: StatusFilter; label: string }[] = [
+  { id: "ALL", label: "All" }, { id: "UPCOMING", label: "Upcoming" },
+  { id: "COMPLETED", label: "Completed" }, { id: "CANCELLED", label: "Cancelled" },
+];
+const PAGE_SIZE = 10;
+
+const toStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const monday = (d: Date) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); return r; };
+const sunday = (m: Date) => { const r = new Date(m); r.setDate(r.getDate() + 6); return r; };
+
+const PRESETS = [
+  { label: "This Week", from: () => toStr(monday(new Date())), to: () => toStr(sunday(monday(new Date()))) },
+  { label: "Last Week", from: () => { const m = monday(new Date()); m.setDate(m.getDate() - 7); return toStr(m); }, to: () => { const m = monday(new Date()); m.setDate(m.getDate() - 1); return toStr(m); } },
+  { label: "Next Week", from: () => { const m = monday(new Date()); m.setDate(m.getDate() + 7); return toStr(m); }, to: () => { const m = monday(new Date()); m.setDate(m.getDate() + 13); return toStr(m); } },
+  { label: "This Month", from: () => { const d = new Date(); d.setDate(1); return toStr(d); }, to: () => { const d = new Date(); d.setMonth(d.getMonth() + 1, 0); return toStr(d); } },
+  { label: "Last Month", from: () => { const d = new Date(); d.setMonth(d.getMonth() - 1, 1); return toStr(d); }, to: () => { const d = new Date(); d.setDate(0); return toStr(d); } },
+  { label: "Next Month", from: () => { const d = new Date(); d.setMonth(d.getMonth() + 1, 1); return toStr(d); }, to: () => { const d = new Date(); d.setMonth(d.getMonth() + 2, 0); return toStr(d); } },
+];
+
+const statusBadge = (s: string) => s === "UPCOMING" ? "bg-primary/15 text-primary-dark" : s === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700";
+const accentColor = (s: string) => s === "UPCOMING" ? "bg-primary" : s === "COMPLETED" ? "bg-success" : "bg-danger";
+const formatDate = (s: string) => s ? new Date(s + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+const getActivePreset = (f: string, t: string) => PRESETS.find(p => p.from() === f && p.to() === t)?.label ?? null;
 
 export default function SchedulePage() {
-  const fetchSchedules = useCallback(() => getSchedules(), []);
-  const fetchClasses = useCallback(() => getClasses(), []);
-  const { data: schedules, loading: sLoading } = useFetch(fetchSchedules);
-  const { data: classes, loading: cLoading } = useFetch(fetchClasses);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [dateFrom, setDateFrom] = useState(PRESETS[0].from());
+  const [dateTo, setDateTo] = useState(PRESETS[0].to());
+  const [dateOpen, setDateOpen] = useState(false);
 
-  const loading = sLoading || cLoading;
+  const fetchSessions = useCallback(() => getSchedules({
+    status: statusFilter === "ALL" ? undefined : statusFilter, from: dateFrom, to: dateTo,
+  }), [statusFilter, dateFrom, dateTo]);
+  const { data: sessions, loading, refetch } = useFetch(fetchSessions);
 
-  const classMap = useMemo(() => {
-    const map: Record<string, ClassItem> = {};
-    (classes ?? []).forEach((c) => { map[c.id] = c; });
-    return map;
-  }, [classes]);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [cancelTarget, setCancelTarget] = useState<Schedule | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [reactivateTarget, setReactivateTarget] = useState<Schedule | null>(null);
+  const [reactivateNote, setReactivateNote] = useState("");
+  const [reactivating, setReactivating] = useState(false);
 
-  const grouped = useMemo(() => {
-    const g: Record<number, Schedule[]> = {};
-    (schedules ?? []).forEach((s) => {
-      if (!g[s.dayOfWeek]) g[s.dayOfWeek] = [];
-      g[s.dayOfWeek].push(s);
-    });
-    // Sort each day by start time
-    Object.values(g).forEach((arr) => arr.sort((a, b) => a.startTime.localeCompare(b.startTime)));
-    return g;
-  }, [schedules]);
+  useEffect(() => { setPage(1); }, [statusFilter, dateFrom, dateTo, search]);
 
-  const hasSched = Object.keys(grouped).length > 0;
+  const all = sessions ?? [];
+  const counts = { ALL: all.length, UPCOMING: all.filter(s => s.status === "UPCOMING").length, COMPLETED: all.filter(s => s.status === "COMPLETED").length, CANCELLED: all.filter(s => s.status === "CANCELLED").length };
+
+  const filtered = all.filter(s => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return s.className.toLowerCase().includes(q) || (s.location?.toLowerCase().includes(q));
+  });
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const activePreset = getActivePreset(dateFrom, dateTo);
+  const dateLabel = activePreset || `${formatDate(dateFrom)} — ${formatDate(dateTo)}`;
+
+  // Stat cards always show current month data
+  const monthFrom = (() => { const d = new Date(); d.setDate(1); return toStr(d); })();
+  const monthTo = (() => { const d = new Date(); d.setMonth(d.getMonth() + 1, 0); return toStr(d); })();
+  const fetchMonthStats = useCallback(() => getSchedules({ from: monthFrom, to: monthTo }), [monthFrom, monthTo]);
+  const { data: monthSessions, refetch: refetchStats } = useFetch(fetchMonthStats);
+  const monthAll = monthSessions ?? [];
+  const monthCounts = { ALL: monthAll.length, UPCOMING: monthAll.filter(s => s.status === "UPCOMING").length, COMPLETED: monthAll.filter(s => s.status === "COMPLETED").length, CANCELLED: monthAll.filter(s => s.status === "CANCELLED").length };
+  const currentMonthName = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  const canReactivate = (s: Schedule) => {
+    if (s.status !== "CANCELLED") return false;
+    const now = new Date();
+    const sessionEnd = new Date(s.sessionDate + "T" + s.endTime);
+    return sessionEnd > now;
+  };
+
+  const handleReactivate = async () => {
+    if (!reactivateTarget) return;
+    setReactivating(true);
+    try { await reactivateSchedule(reactivateTarget.id, reactivateNote || undefined); toast.success("Session reactivated"); setReactivateTarget(null); setReactivateNote(""); refetch(); refetchStats(); }
+    catch (err: unknown) { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Failed to reactivate"); }
+    finally { setReactivating(false); }
+  };
+
+  const handleCancel = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    try { await cancelSchedule(cancelTarget.id, cancelReason || undefined); toast.success("Session cancelled"); setCancelTarget(null); setCancelReason(""); refetch(); refetchStats(); }
+    catch (err: unknown) { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Failed to cancel"); }
+    finally { setCancelling(false); }
+  };
+
+  const pageNums = Array.from({ length: totalPages }, (_, i) => i + 1)
+    .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+    .reduce<(number | string)[]>((acc, p, idx, arr) => { if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []);
 
   return (
     <AppShell title="Schedule">
-      {loading ? (
-        <div className="space-y-4">
-          <CardSkeleton /><CardSkeleton /><CardSkeleton />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div><h2 className="text-lg font-semibold text-text">Class Schedule</h2><p className="text-xs text-text-muted mt-0.5">{counts.UPCOMING} upcoming · {counts.COMPLETED} completed · {counts.CANCELLED} cancelled</p></div>
+      </div>
+
+      {/* Stat Cards */}
+      {!loading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Total Sessions</p>
+                <p className="text-3xl font-bold text-text mt-1">{monthCounts.ALL}</p>
+                <p className="text-xs text-text-muted mt-1">{currentMonthName}</p>
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shadow-md"><BarChart3 className="w-5 h-5" /></div>
+            </div>
+          </div>
+          <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Completed</p>
+                <p className="text-3xl font-bold text-text mt-1">{monthCounts.COMPLETED}</p>
+                <p className="text-xs text-emerald-700 font-medium mt-1">{monthCounts.ALL > 0 ? Math.round((monthCounts.COMPLETED / monthCounts.ALL) * 100) : 0}% of total</p>
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white shadow-md"><CheckCircle className="w-5 h-5" /></div>
+            </div>
+          </div>
+          <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Upcoming</p>
+                <p className="text-3xl font-bold text-text mt-1">{monthCounts.UPCOMING}</p>
+                <p className="text-xs text-indigo-700 font-medium mt-1">{monthCounts.UPCOMING === 1 ? "1 class remaining" : `${monthCounts.UPCOMING} classes remaining`}</p>
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-700 flex items-center justify-center text-white shadow-md"><Clock className="w-5 h-5" /></div>
+            </div>
+          </div>
+          <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Cancelled</p>
+                <p className="text-3xl font-bold text-text mt-1">{monthCounts.CANCELLED}</p>
+                <p className={`text-xs font-medium mt-1 ${monthCounts.CANCELLED > 0 ? "text-red-700" : "text-emerald-700"}`}>{monthCounts.CANCELLED > 0 ? `${Math.round((monthCounts.CANCELLED / monthCounts.ALL) * 100)}% cancellation rate` : "No cancellations"}</p>
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white shadow-md"><AlertTriangle className="w-5 h-5" /></div>
+            </div>
+          </div>
         </div>
-      ) : !hasSched ? (
-        <EmptyState icon={Calendar} title="No schedule yet" description="Schedules will appear here once configured in the backend" />
+      )}
+
+      {/* Filters */}
+      <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-4 mb-6 space-y-3">
+        {/* Search + Date picker */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by class name, location..." className="w-full pl-10 pr-4 py-2.5 border border-border rounded-xl text-sm text-text bg-bg-card placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+          </div>
+          {/* Date range button */}
+          <div className="relative">
+            <button onClick={() => setDateOpen(!dateOpen)} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${activePreset ? "border-primary/30 bg-primary/5 text-primary shadow-sm" : "border-border text-text-muted hover:border-border hover:bg-bg"}`}>
+              <Calendar className={`w-4 h-4 ${activePreset ? "text-primary" : "text-text-muted"}`} />
+              <span className="text-xs">{dateLabel}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3.5 h-3.5 text-text-muted transition-transform duration-200 ${dateOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+            </button>
+            <AnimatePresence>
+              {dateOpen && (<>
+                <div className="fixed inset-0 z-30" onClick={() => setDateOpen(false)} />
+                <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-2 z-40 bg-bg-card rounded-2xl border border-border shadow-xl w-[400px] overflow-hidden">
+                  <div className="p-4 border-b border-border">
+                    <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-3 px-1">Quick Select</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {PRESETS.map(p => (<button key={p.label} onClick={() => { setDateFrom(p.from()); setDateTo(p.to()); }}
+                        className={`px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${activePreset === p.label ? "text-white shadow-sm bg-primary" : "bg-bg text-text-muted hover:bg-border/50"}`}>{p.label}</button>))}
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <p className="text-xs font-bold text-text-muted uppercase tracking-widest px-1">Custom Range</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className="text-xs font-semibold text-text-muted mb-1.5 block">From</label><input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-border text-sm text-text bg-bg focus:outline-none focus:ring-2 focus:ring-primary/20" /></div>
+                      <div><label className="text-xs font-semibold text-text-muted mb-1.5 block">To</label><input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-border text-sm text-text bg-bg focus:outline-none focus:ring-2 focus:ring-primary/20" /></div>
+                    </div>
+                    <div className="flex items-center justify-between bg-primary/5 rounded-xl px-4 py-2.5">
+                      <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary animate-pulse" /><span className="text-xs font-semibold text-primary">{formatDate(dateFrom)} → {formatDate(dateTo)}</span></div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 p-4 border-t border-border bg-bg/40">
+                    <button onClick={() => { setDateFrom(PRESETS[0].from()); setDateTo(PRESETS[0].to()); setDateOpen(false); }} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-text-muted bg-bg-card border border-border hover:bg-bg transition-all">Reset</button>
+                    <button onClick={() => setDateOpen(false)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary transition-all hover:shadow-md">Apply</button>
+                  </div>
+                </motion.div>
+              </>)}
+            </AnimatePresence>
+          </div>
+        </div>
+        {/* Status tabs */}
+        <div className="flex flex-wrap gap-1.5">
+          {STATUSES.map(s => (<button key={s.id} onClick={() => setStatusFilter(s.id)} className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${statusFilter === s.id ? "text-white shadow-md bg-primary" : "bg-bg text-text-muted hover:bg-border/50"}`}>{s.label} ({counts[s.id]})</button>))}
+        </div>
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-8"><div className="animate-pulse space-y-4">{[...Array(5)].map((_, i) => <div key={i} className="h-10 bg-border/50 rounded-lg" />)}</div></div>
+      ) : !filtered.length ? (
+        <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-12 text-center">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center"><Calendar className="w-7 h-7 text-primary/40" /></div>
+          <p className="text-sm font-medium text-text-muted">No sessions found</p>
+          <p className="text-xs text-text-muted mt-1">Add schedules to your classes to see sessions here</p>
+        </div>
       ) : (
-        <div className="space-y-6">
-          {[1, 2, 3, 4, 5, 6, 0].map((day) => {
-            const items = grouped[day];
-            if (!items?.length) return null;
-            return (
-              <div key={day}>
-                <h3 className="text-sm font-semibold text-text mb-2">{DAYS[day]}</h3>
-                <div className="space-y-2">
-                  {items.map((s) => {
-                    const cls = classMap[s.classId];
-                    return (
-                      <div
-                        key={s.id}
-                        className="flex items-center gap-4 rounded-2xl bg-bg-card border border-border p-4 shadow-sm hover:shadow-md transition-shadow"
-                      >
-                        <div className="rounded-xl bg-primary/10 p-2.5">
-                          <Clock className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-text truncate">{cls?.name ?? "Unknown Class"}</p>
-                          <p className="text-sm text-text-muted">{cls?.subject ?? ""}</p>
-                        </div>
-                        <p className="text-sm font-medium text-text-muted whitespace-nowrap">
-                          {s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}
-                        </p>
-                      </div>
-                    );
-                  })}
+        <div className="bg-bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
+          <div className="hidden lg:block overflow-x-auto">
+            <table className="w-full">
+              <thead><tr className="border-b border-border">{["Date", "Class", "Grade", "Time", "Location", "Status", ""].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
+              <tbody>
+                {paginated.map(s => (
+                  <tr key={s.id} className="border-b border-border/50 hover:bg-bg/50 transition-colors">
+                    <td className="px-5 py-3.5 text-sm font-medium text-text">{new Date(s.sessionDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</td>
+                    <td className="px-5 py-3.5 text-sm text-text">{s.className}</td>
+                    <td className="px-5 py-3.5"><span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-secondary/15 text-cyan-800">Grade {s.grade}</span></td>
+                    <td className="px-5 py-3.5 text-sm text-text-muted">{s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}</td>
+                    <td className="px-5 py-3.5 text-sm text-text-muted">{s.location || "—"}</td>
+                    <td className="px-5 py-3.5"><span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${statusBadge(s.status)}`}>{s.status}</span></td>
+                    <td className="px-5 py-3.5">
+                      {s.status === "UPCOMING" && (<button onClick={() => setCancelTarget(s)} className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-all" title="Cancel"><XCircle className="w-4 h-4" /></button>)}
+                      {canReactivate(s) && (<button onClick={() => setReactivateTarget(s)} className="p-1.5 rounded-lg text-text-muted hover:text-success hover:bg-success/10 transition-all" title="Reactivate"><RotateCcw className="w-4 h-4" /></button>)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="lg:hidden">
+            {paginated.map((s, i) => (
+              <div key={s.id} className={`p-4 ${i % 2 === 0 ? "bg-bg-card" : "bg-bg/60"} ${i < paginated.length - 1 ? "border-b-2 border-border/80" : ""}`}>
+                <div className="flex gap-3">
+                  <div className={`w-1 rounded-full flex-shrink-0 ${accentColor(s.status)}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div><p className="font-semibold text-text text-sm truncate">{s.className}</p><p className="text-[10px] text-text-muted">{new Date(s.sessionDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p></div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${statusBadge(s.status)}`}>{s.status}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Grade</p><p className="text-xs font-medium text-text mt-0.5">{s.grade}</p></div>
+                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Time</p><p className="text-xs font-medium text-text mt-0.5">{s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}</p></div>
+                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Location</p><p className="text-xs font-medium text-text mt-0.5 truncate">{s.location || "—"}</p></div>
+                    </div>
+                    {s.status === "UPCOMING" && (<button onClick={() => setCancelTarget(s)} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-danger bg-danger/10 hover:bg-danger/20 transition-all"><XCircle className="w-3.5 h-3.5" />Cancel</button>)}
+                    {canReactivate(s) && (<button onClick={() => setReactivateTarget(s)} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-success bg-success/10 hover:bg-success/20 transition-all"><RotateCcw className="w-3.5 h-3.5" />Reactivate</button>)}
+                  </div>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-bg/40">
+              <p className="text-xs text-text-muted">Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}</p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-1 text-xs rounded-md text-text-muted hover:bg-border/50 disabled:opacity-30 transition">«</button>
+                <button onClick={() => setPage(page - 1)} disabled={page === 1} className="px-2 py-1 text-xs rounded-md text-text-muted hover:bg-border/50 disabled:opacity-30 transition">‹</button>
+                {pageNums.map((item, idx) => typeof item === "string" ? <span key={`d${idx}`} className="px-1 text-xs text-text-muted">…</span> : <button key={item} onClick={() => setPage(item)} className={`min-w-[28px] py-1 text-xs rounded-md font-semibold transition ${page === item ? "text-white shadow-sm bg-primary" : "text-text-muted hover:bg-border/50"}`}>{item}</button>)}
+                <button onClick={() => setPage(page + 1)} disabled={page === totalPages} className="px-2 py-1 text-xs rounded-md text-text-muted hover:bg-border/50 disabled:opacity-30 transition">›</button>
+                <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-1 text-xs rounded-md text-text-muted hover:bg-border/50 disabled:opacity-30 transition">»</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cancel Modal */}
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setCancelTarget(null)} />
+          <div className="relative z-10 bg-bg-card rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-border">
+            <div className="w-12 h-12 rounded-2xl bg-danger/10 flex items-center justify-center mx-auto mb-4"><XCircle className="w-6 h-6 text-danger" /></div>
+            <h3 className="text-base font-semibold text-text text-center">Cancel Session</h3>
+            <p className="text-sm text-text-muted text-center mt-1">{cancelTarget.className} — {new Date(cancelTarget.sessionDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
+            <div className="mt-4"><label className="block text-sm font-medium text-text mb-1">Reason (optional)</label><input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="e.g. Teacher unavailable" className="w-full rounded-xl border border-border bg-bg-card px-4 py-2.5 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => { setCancelTarget(null); setCancelReason(""); }} className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-text hover:bg-bg transition-all">Keep</button>
+              <button onClick={handleCancel} disabled={cancelling} className="flex-1 h-10 rounded-xl text-sm font-semibold text-white bg-danger hover:bg-danger/90 transition-all disabled:opacity-60">{cancelling ? "Cancelling..." : "Cancel Session"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reactivate Modal */}
+      {reactivateTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setReactivateTarget(null)} />
+          <div className="relative z-10 bg-bg-card rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-border">
+            <div className="w-12 h-12 rounded-2xl bg-success/10 flex items-center justify-center mx-auto mb-4"><RotateCcw className="w-6 h-6 text-success" /></div>
+            <h3 className="text-base font-semibold text-text text-center">Reactivate Session</h3>
+            <p className="text-sm text-text-muted text-center mt-1">{reactivateTarget.className} — {new Date(reactivateTarget.sessionDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
+            <div className="mt-4"><label className="block text-sm font-medium text-text mb-1">Note (optional)</label><input value={reactivateNote} onChange={e => setReactivateNote(e.target.value)} placeholder="e.g. Rescheduled, teacher available" className="w-full rounded-xl border border-border bg-bg-card px-4 py-2.5 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => { setReactivateTarget(null); setReactivateNote(""); }} className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-text hover:bg-bg transition-all">Cancel</button>
+              <button onClick={handleReactivate} disabled={reactivating} className="flex-1 h-10 rounded-xl text-sm font-semibold text-white bg-success hover:bg-success/90 transition-all disabled:opacity-60">{reactivating ? "Reactivating..." : "Reactivate"}</button>
+            </div>
+          </div>
         </div>
       )}
     </AppShell>
