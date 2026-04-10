@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #4F46E5;
+  --color-primary-light: #6366F1;
+  --color-primary-dark: #4338CA;
+  --color-secondary: #06B6D4;
+  --color-success: #22C55E;
+  --color-danger: #EF4444;
+  --color-warning: #F59E0B;
+  --color-bg: #F9FAFB;
+  --color-bg-card: #FFFFFF;
+  --color-text: #111827;
+  --color-text-muted: #6B7280;
+  --color-border: #E5E7EB;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.dark {
+  --color-bg: #0F172A;
+  --color-bg-card: #1E293B;
+  --color-text: #F1F5F9;
+  --color-text-muted: #94A3B8;
+  --color-border: #334155;
+}
+
+/* Scanner overlay */
+.scanner-overlay {
+  position: relative;
+}
+.scanner-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--color-primary);
+  border-radius: 1rem;
+  animation: pulse-border 2s infinite;
+}
+@keyframes pulse-border {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Skeleton animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--color-border) 25%, #f3f4f6 50%, var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 0.5rem;
+}
