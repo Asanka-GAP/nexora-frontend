@@ -48,7 +48,7 @@ export default function TeachersPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">{[...Array(3)].map((_, i) => (<div key={i} className="bg-slate-900 rounded-xl p-4 border border-slate-800 animate-pulse"><div className="h-4 bg-slate-800 rounded w-40" /></div>))}</div>
+        <p className="text-slate-500 text-center py-12">Loading...</p>
       ) : !teachers.length ? (
         <div className="bg-slate-900 rounded-2xl border border-slate-800 p-12 text-center"><p className="text-slate-500">No teachers yet. Add your first teacher.</p></div>
       ) : (

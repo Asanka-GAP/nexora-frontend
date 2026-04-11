@@ -11,11 +11,7 @@ export default function SuperAdminDashboardPage() {
     getAdminDashboard().then(setData).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  if (loading) return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-5">
-      {[...Array(4)].map((_, i) => (<div key={i} className="bg-slate-900 rounded-2xl p-5 border border-slate-800 animate-pulse"><div className="h-3 bg-slate-800 rounded w-24 mb-3" /><div className="h-7 bg-slate-800 rounded w-20 mb-2" /></div>))}
-    </div>
-  );
+  if (loading) return <p className="text-slate-500 text-center py-12">Loading...</p>;
 
   if (!data) return <p className="text-slate-500">Failed to load dashboard</p>;
 

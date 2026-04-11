@@ -14,6 +14,13 @@ export interface Student {
   isActive: boolean;
   createdAt: string;
   contacts: StudentContact[];
+  enrolledClasses: EnrolledClass[];
+}
+
+export interface EnrolledClass {
+  id: string;
+  name: string;
+  grade: number;
 }
 
 export interface StudentContact {
@@ -29,6 +36,7 @@ export interface StudentCreateRequest {
   currentGrade: number;
   address?: string;
   contacts: ContactRequest[];
+  classIds?: string[];
 }
 
 export interface ContactRequest {
@@ -47,6 +55,7 @@ export interface ClassItem {
   teacherId: string;
   createdAt: string;
   schedules: ClassScheduleItem[];
+  studentCount: number;
 }
 
 export interface ClassScheduleItem {
@@ -141,6 +150,16 @@ export interface RecentTeacher {
   subject: string;
   status: string;
   createdAt: string;
+}
+
+export interface TeacherProfile {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  phone: string;
+  subject: string;
+  role: string;
 }
 
 export interface TeacherItem {

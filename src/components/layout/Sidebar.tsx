@@ -2,7 +2,7 @@
 import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, Users, BookOpen, ScanLine, Calendar, CalendarDays, X, GraduationCap, CheckSquare,
+  LayoutDashboard, Users, BookOpen, ScanLine, Calendar, CalendarDays, X, GraduationCap, CheckSquare, Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -19,6 +19,7 @@ const navItems = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/attendance", label: "Attendance", icon: CheckSquare },
   { href: "/scanner", label: "Scanner", icon: ScanLine },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 interface SidebarProps {

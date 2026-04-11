@@ -16,6 +16,7 @@ interface AuthContextType {
   forgotPassword: (email: string) => Promise<void>;
   forgotPasswordReset: (email: string, otp: string, newPassword: string) => Promise<void>;
   resendOtp: (email: string) => Promise<void>;
+  updateUser: (partial: Partial<AuthUser>) => void;
   logout: () => void;
 }
 
@@ -24,7 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => { throw new Error("not ready"); },
   resetPassword: async () => {}, verifyOtpByUsername: async () => {},
   forgotPassword: async () => {}, forgotPasswordReset: async () => {},
-  resendOtp: async () => {}, logout: () => {},
+  resendOtp: async () => {}, updateUser: () => {}, logout: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -83,6 +84,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await resendOtpApi(email);
   }, []);
 
+  const updateUser = useCallback((partial: Partial<AuthUser>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...partial };
+      localStorage.setItem("nexora_user", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem("nexora_token");
     localStorage.removeItem("nexora_user");
@@ -91,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isSuperAdmin: user?.role === "SUPER_ADMIN", login, resetPassword, verifyOtpByUsername, forgotPassword, forgotPasswordReset, resendOtp, logout }}>
+    <AuthContext.Provider value={{ user, loading, isSuperAdmin: user?.role === "SUPER_ADMIN", login, resetPassword, verifyOtpByUsername, forgotPassword, forgotPasswordReset, resendOtp, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

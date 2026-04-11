@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useMemo, useState } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area } from "recharts";
-import { Users, BookOpen, CheckCircle, ScanLine, Calendar as CalendarIcon, Clock, TrendingUp, MapPin, GraduationCap } from "lucide-react";
+import { Users, BookOpen, CheckCircle, ScanLine, Calendar as CalendarIcon, Clock, TrendingUp, MapPin, GraduationCap, ChevronDown, Filter, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
 import AppShell from "@/components/layout/AppShell";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/lib/auth";
@@ -17,6 +18,88 @@ const sunday = (m: Date) => { const r = new Date(m); r.setDate(r.getDate() + 6);
 const startOfWeek = (d: Date) => { const r = new Date(d); r.setDate(r.getDate() - r.getDay()); return r; };
 
 const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const CAL_DAYS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+
+function DatePicker({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = new Date(value + "T00:00:00");
+  const [viewMonth, setViewMonth] = useState(current.getMonth());
+  const [viewYear, setViewYear] = useState(current.getFullYear());
+
+  useEffect(() => {
+    if (open) { const d = new Date(value + "T00:00:00"); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()); }
+  }, [open, value]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate();
+  const cells: { day: number; current: boolean; dateStr: string }[] = [];
+  for (let i = firstDay - 1; i >= 0; i--) {
+    const d = prevMonthDays - i;
+    cells.push({ day: d, current: false, dateStr: toStr(new Date(viewYear, viewMonth - 1, d)) });
+  }
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, current: true, dateStr: toStr(new Date(viewYear, viewMonth, d)) });
+  const remaining = 42 - cells.length;
+  for (let d = 1; d <= remaining; d++) cells.push({ day: d, current: false, dateStr: toStr(new Date(viewYear, viewMonth + 1, d)) });
+
+  const prev = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); } else setViewMonth(viewMonth - 1); };
+  const next = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); } else setViewMonth(viewMonth + 1); };
+
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen(!open)}
+        className={`flex items-center gap-2 pl-3 pr-3.5 py-1.5 rounded-xl border bg-bg transition-all cursor-pointer ${
+          open ? "border-blue-400 ring-2 ring-blue-100" : "border-border hover:border-blue-300 hover:bg-blue-50/30"
+        }`}>
+        <CalendarIcon className="w-3.5 h-3.5 text-blue-600" />
+        <span className="text-xs font-semibold text-text">{current.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+      </button>
+      {open && (
+        <>
+        <div className="fixed inset-0 z-40 bg-black/20 sm:hidden" onClick={() => setOpen(false)} />
+        <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.15 }}
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:absolute sm:top-full sm:left-auto sm:right-0 sm:translate-x-0 sm:translate-y-0 sm:mt-2 z-50 bg-bg-card rounded-2xl border border-border shadow-xl p-4 w-[280px]">
+          <p className="text-[9px] font-bold text-text-muted uppercase tracking-widest mb-3">{label}</p>
+          <div className="flex items-center justify-between mb-3">
+            <button type="button" onClick={prev} className="p-1.5 rounded-lg hover:bg-bg transition"><ChevronLeft className="w-4 h-4 text-text-muted" /></button>
+            <span className="text-sm font-bold text-text">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+            <button type="button" onClick={next} className="p-1.5 rounded-lg hover:bg-bg transition"><ChevronRight className="w-4 h-4 text-text-muted" /></button>
+          </div>
+          <div className="grid grid-cols-7 mb-1">
+            {CAL_DAYS.map(d => <div key={d} className="text-center text-[10px] font-bold text-text-muted/50 py-1">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-px">
+            {cells.map((c, i) => {
+              const isSelected = c.dateStr === value;
+              const isToday = c.dateStr === toStr(new Date());
+              return (
+                <button key={i} type="button" onClick={() => { onChange(c.dateStr); setOpen(false); }}
+                  className={`h-8 rounded-lg text-xs font-medium transition-all ${
+                    isSelected ? "bg-blue-600 text-white font-bold shadow-sm"
+                      : isToday ? "ring-1 ring-blue-400 text-blue-600 font-bold"
+                        : c.current ? "text-text hover:bg-blue-50 hover:text-blue-700" : "text-text-muted/30"
+                  }`}>{c.day}</button>
+              );
+            })}
+          </div>
+          <div className="mt-3 pt-3 border-t border-border flex justify-between">
+            <button type="button" onClick={() => { onChange(toStr(new Date())); setOpen(false); }} className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition">Today</button>
+            <button type="button" onClick={() => setOpen(false)} className="text-[11px] font-semibold text-text-muted hover:text-text transition">Close</button>
+          </div>
+        </motion.div>
+        </>
+      )}
+    </div>
+  );
+}
 
 const SCHEDULE_STYLES: Record<string, { card: string; badge: string; gradient: string }> = {
   UPCOMING: {
@@ -85,6 +168,8 @@ export default function DashboardPage() {
   const [chartClass, setChartClass] = useState("");
   const [chartFrom, setChartFrom] = useState(toStr(monday(new Date())));
   const [chartTo, setChartTo] = useState(toStr(sunday(monday(new Date()))));
+  const [classDropdownOpen, setClassDropdownOpen] = useState(false);
+  const [classSearchQuery, setClassSearchQuery] = useState("");
 
   const { data: chartRecords, loading: chartLoading } = useFetch(useCallback(() => {
     const p: Record<string, string> = { from: chartFrom, to: chartTo };
@@ -109,8 +194,6 @@ export default function DashboardPage() {
     setChartPreset(p);
   };
 
-  if (loading) return (<AppShell title="Dashboard"><div className="space-y-6"><div className="h-16 bg-border/30 rounded-2xl animate-pulse" /><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">{[...Array(4)].map((_, i) => <CardSkeleton key={i} />)}</div></div></AppShell>);
-
   return (
     <AppShell title="Dashboard">
       <div className="space-y-6">
@@ -126,19 +209,19 @@ export default function DashboardPage() {
         {/* Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { label: "Today's Scans", value: dashboard?.todayCount ?? 0, sub: "Attendance marked", color: "text-emerald-600", bg: "bg-emerald-50", iconBg: "from-emerald-500 to-emerald-600", icon: <CheckCircle className="w-5 h-5" /> },
-            { label: "Students", value: students?.length ?? 0, sub: "Total enrolled", color: "text-indigo-600", bg: "bg-indigo-50", iconBg: "from-indigo-500 to-indigo-600", icon: <Users className="w-5 h-5" /> },
-            { label: "Classes", value: classes?.length ?? 0, sub: "Active classes", color: "text-blue-600", bg: "bg-blue-50", iconBg: "from-blue-500 to-blue-600", icon: <BookOpen className="w-5 h-5" /> },
-            { label: "Upcoming", value: upcoming.length, sub: "This week", color: "text-amber-600", bg: "bg-amber-50", iconBg: "from-amber-500 to-orange-500", icon: <CalendarIcon className="w-5 h-5" /> },
+            { label: "TODAY'S SCANS", value: dashboard?.todayCount ?? 0, sub: `${dashboard?.todayCount ?? 0} attendance marked`, gradient: "from-emerald-600 to-teal-600", iconBg: "bg-white/15", icon: <CheckCircle className="w-5 h-5" /> },
+            { label: "STUDENTS", value: students?.length ?? 0, sub: "Total enrolled", gradient: "from-blue-600 to-indigo-600", iconBg: "bg-white/15", icon: <Users className="w-5 h-5" /> },
+            { label: "CLASSES", value: classes?.length ?? 0, sub: "Active classes", gradient: "from-violet-600 to-purple-600", iconBg: "bg-white/15", icon: <BookOpen className="w-5 h-5" /> },
+            { label: "UPCOMING", value: upcoming.length, sub: "This week", gradient: "from-amber-500 to-orange-500", iconBg: "bg-white/15", icon: <CalendarIcon className="w-5 h-5" /> },
           ].map((card, i) => (
-            <motion.div key={card.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06, duration: 0.4 }}
-              className="bg-bg-card rounded-2xl p-5 border border-border hover:border-border/80 hover:shadow-lg transition-all duration-300 group">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${card.iconBg} flex items-center justify-center text-white shadow-sm group-hover:shadow-md group-hover:scale-105 transition-all duration-300`}>{card.icon}</div>
-                <TrendingUp className={`w-4 h-4 ${card.color} opacity-40`} />
+            <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+              className={`bg-gradient-to-br ${card.gradient} rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow duration-200 hover:-translate-y-0.5`}>
+              <div className="flex items-start justify-between mb-4">
+                <p className="text-xs font-bold text-white/70 uppercase tracking-widest">{card.label}</p>
+                <div className={`w-10 h-10 rounded-xl ${card.iconBg} flex items-center justify-center text-white`}>{card.icon}</div>
               </div>
-              <p className="text-3xl font-bold text-text tracking-tight">{card.value}</p>
-              <p className="text-xs text-text-muted mt-1">{card.label} <span className="text-text-muted/60">/ {card.sub}</span></p>
+              <p className="text-3xl font-bold text-white leading-tight">{card.value}</p>
+              <p className="text-xs text-white/60 mt-1">{card.sub}</p>
             </motion.div>
           ))}
         </div>
@@ -150,25 +233,87 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
             className="lg:col-span-3 bg-bg-card rounded-2xl border border-border overflow-hidden">
-            <div className="px-6 py-4 border-b border-border">
-              <div className="flex items-center justify-between mb-3">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="font-semibold text-text">Attendance Overview</h2>
-                  <p className="text-xs text-text-muted mt-0.5">Daily attendance count</p>
+                  <h2 className="font-semibold text-white">Attendance Overview</h2>
+                  <p className="text-xs text-blue-100/70 mt-0.5">Daily attendance count</p>
                 </div>
-                <select value={chartClass} onChange={e => setChartClass(e.target.value)} className="px-3 py-2 rounded-xl border border-border bg-bg text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/20">
-                  <option value="">All Classes</option>
-                  {(classes ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <div className="relative">
+                  <button type="button" onClick={() => { setClassDropdownOpen(!classDropdownOpen); setClassSearchQuery(""); }}
+                    className={`flex items-center gap-2 pl-3 pr-3.5 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer min-w-[160px] ${
+                      classDropdownOpen ? "bg-white/25 ring-2 ring-white/20" : "bg-white/15 hover:bg-white/25"
+                    }`}>
+                    <Filter className="w-3.5 h-3.5 text-white/60 flex-shrink-0" />
+                    <span className={`flex-1 text-left truncate ${chartClass ? "text-white font-semibold" : "text-white/70"}`}>
+                      {chartClass ? (classes ?? []).find(c => c.id === chartClass)?.name ?? "All Classes" : "All Classes"}
+                    </span>
+                    {chartClass ? (
+                      <button type="button" onClick={e => { e.stopPropagation(); setChartClass(""); }} className="p-0.5 rounded-full hover:bg-white/20 transition"><X className="w-3 h-3 text-white/70" /></button>
+                    ) : (
+                      <ChevronDown className={`w-3.5 h-3.5 text-white/50 transition-transform ${classDropdownOpen ? "rotate-180" : ""}`} />
+                    )}
+                  </button>
+                  <AnimatePresence>
+                    {classDropdownOpen && (<>
+                      <div className="fixed inset-0 z-30" onClick={() => setClassDropdownOpen(false)} />
+                      <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.15 }}
+                        className="absolute right-0 top-full mt-1.5 z-40 bg-bg-card rounded-xl border border-border shadow-xl overflow-hidden min-w-[220px]">
+                        <div className="p-2 border-b border-border">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+                            <input value={classSearchQuery} onChange={e => setClassSearchQuery(e.target.value)} placeholder="Search classes..." autoFocus
+                              className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-bg text-xs text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                          </div>
+                        </div>
+                        <div className="max-h-[200px] overflow-y-auto p-1.5">
+                          <button type="button" onClick={() => { setChartClass(""); setClassDropdownOpen(false); }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs font-medium transition-all ${!chartClass ? "bg-primary/[0.07] text-primary font-semibold" : "text-text hover:bg-bg/80"}`}>
+                            <BookOpen className="w-3.5 h-3.5 opacity-40" /> All Classes
+                          </button>
+                          {(() => {
+                            const filtered = (classes ?? []).filter(c => !classSearchQuery.trim() || c.name.toLowerCase().includes(classSearchQuery.toLowerCase()));
+                            return filtered.length === 0 ? (
+                              <p className="text-xs text-text-muted text-center py-4">No classes found</p>
+                            ) : filtered.map(c => (
+                              <button type="button" key={c.id} onClick={() => { setChartClass(c.id); setClassDropdownOpen(false); }}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs font-medium transition-all ${chartClass === c.id ? "bg-primary/[0.07] text-primary font-semibold" : "text-text hover:bg-bg/80"}`}>
+                                <BookOpen className="w-3.5 h-3.5 opacity-40" />
+                                <span className="flex-1 truncate">{c.name}</span>
+                                {c.grade && <span className="text-[10px] text-text-muted bg-bg px-1.5 py-0.5 rounded-md">G{c.grade}</span>}
+                              </button>
+                            ));
+                          })()}
+                        </div>
+                      </motion.div>
+                    </>)}
+                  </AnimatePresence>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
                 {["This Week", "Last Week", "This Month", "Last Month"].map(p => (
-                  <button key={p} onClick={() => applyPreset(p)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${chartPreset === p ? "text-white bg-primary shadow-sm" : "text-text-muted hover:bg-bg hover:text-text"}`}>{p}</button>
+                  <button key={p} onClick={() => applyPreset(p)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                      chartPreset === p
+                        ? "text-blue-700 bg-white shadow-sm"
+                        : "text-white/70 bg-white/10 hover:bg-white/20 hover:text-white"
+                    }`}>{p}</button>
                 ))}
-                <div className="w-px h-4 bg-border mx-1" />
-                <input type="date" value={chartFrom} onChange={e => { setChartFrom(e.target.value); setChartPreset(null); }} className="px-2.5 py-1.5 rounded-lg border border-border bg-bg text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                <span className="text-xs text-text-muted">to</span>
-                <input type="date" value={chartTo} onChange={e => { setChartTo(e.target.value); setChartPreset(null); }} className="px-2.5 py-1.5 rounded-lg border border-border bg-bg text-xs text-text focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                <div className="w-px h-5 bg-white/20 mx-1 hidden sm:block" />
+                <div className="flex items-center gap-2">
+                  <div className="hidden sm:contents">
+                    <DatePicker value={chartFrom} onChange={v => { setChartFrom(v); setChartPreset(null); }} label="From" />
+                    <div className="w-4 h-px bg-white/30" />
+                    <DatePicker value={chartTo} onChange={v => { setChartTo(v); setChartPreset(null); }} label="To" />
+                  </div>
+                  <div className="flex sm:hidden items-center gap-2">
+                    <input type="date" value={chartFrom} onChange={e => { setChartFrom(e.target.value); setChartPreset(null); }}
+                      className="px-2.5 py-1.5 rounded-xl bg-white/15 text-white text-xs font-medium border-0 outline-none [color-scheme:dark] w-[115px]" />
+                    <div className="w-3 h-px bg-white/30" />
+                    <input type="date" value={chartTo} onChange={e => { setChartTo(e.target.value); setChartPreset(null); }}
+                      className="px-2.5 py-1.5 rounded-xl bg-white/15 text-white text-xs font-medium border-0 outline-none [color-scheme:dark] w-[115px]" />
+                  </div>
+                </div>
               </div>
             </div>
             <div className="px-4 pt-4 pb-3">
@@ -190,22 +335,50 @@ export default function DashboardPage() {
 
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
             className="bg-bg-card rounded-2xl border border-border overflow-hidden flex flex-col">
-            <div className="px-5 py-4 border-b border-border">
-              <h2 className="font-semibold text-text text-sm">{"Today's Scans"}</h2>
-              <p className="text-xs text-text-muted mt-0.5">{dashboard?.todayCount ?? 0} students</p>
-            </div>
-            <div className="flex-1 divide-y divide-border overflow-y-auto">
-              {(!dashboard?.recentToday || dashboard.recentToday.length === 0) ? (
-                <div className="flex flex-col items-center justify-center py-10 text-text-muted"><CheckCircle className="w-8 h-8 opacity-20 mb-2" /><p className="text-xs">No scans yet today</p></div>
-              ) : dashboard.recentToday.map(r => (
-                <div key={r.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-bg/50 transition-colors">
-                  <div className="w-7 h-7 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0"><CheckCircle className="w-3.5 h-3.5 text-emerald-500" /></div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-text truncate">{r.studentName}</p>
-                    <p className="text-[10px] text-text-muted">{r.className}</p>
-                  </div>
-                  <span className="text-[10px] text-text-muted tabular-nums">{r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+            {/* Gradient header */}
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-white text-sm">{"Today's Scans"}</h2>
+                  <p className="text-emerald-100/70 text-xs mt-0.5">Live attendance feed</p>
                 </div>
+                <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
+                  <ScanLine className="w-4.5 h-4.5 text-white" />
+                </div>
+              </div>
+              {(dashboard?.todayCount ?? 0) > 0 && (
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-2xl font-bold text-white">{dashboard?.todayCount}</span>
+                  <span className="text-xs text-emerald-100/70">students scanned</span>
+                </div>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {(!dashboard?.recentToday || dashboard.recentToday.length === 0) ? (
+                <div className="flex flex-col items-center justify-center py-12 text-text-muted">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center mb-3">
+                    <ScanLine className="w-6 h-6 text-emerald-300" />
+                  </div>
+                  <p className="text-xs font-medium">No scans yet today</p>
+                  <p className="text-[10px] text-text-muted/60 mt-0.5">Start scanning to see activity</p>
+                </div>
+              ) : dashboard.recentToday.slice(0, 5).map((r, i) => (
+                <motion.div key={r.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 + i * 0.05 }}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50/40 transition-colors border-b border-border/50 last:border-b-0 group">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <span className="text-[11px] font-bold text-white">{r.studentName?.charAt(0)?.toUpperCase()}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-text truncate">{r.studentName}</p>
+                    <p className="text-[10px] text-text-muted truncate">{r.className}</p>
+                  </div>
+                  {r.checkInTime && (
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 flex-shrink-0">
+                      <Clock className="w-2.5 h-2.5 text-emerald-500" />
+                      <span className="text-[10px] font-semibold text-emerald-700 tabular-nums">{new Date(r.checkInTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                  )}
+                </motion.div>
               ))}
             </div>
           </motion.div>
@@ -215,125 +388,184 @@ export default function DashboardPage() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
           className="bg-bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-4 flex items-center justify-between">
             <div>
-              <h2 className="font-semibold text-text">Weekly Schedule</h2>
-              <p className="text-xs text-text-muted mt-0.5">
+              <h2 className="font-semibold text-white">Weekly Schedule</h2>
+              <p className="text-xs text-indigo-100/70 mt-0.5">
                 {weekStart.toLocaleDateString("en-US", { month: "long", day: "numeric" })} – {weekEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
               </p>
             </div>
             <div className="flex items-center gap-4">
               <div className="hidden sm:flex items-center gap-4 text-[10px]">
-                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_0_3px_rgba(99,102,241,0.2)]" />Upcoming</span>
-                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]" />Done</span>
-                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.2)]" />Cancelled</span>
+                <span className="flex items-center gap-1.5 text-white/70"><span className="w-2 h-2 rounded-full bg-white/80 shadow-[0_0_0_3px_rgba(255,255,255,0.2)]" />Upcoming</span>
+                <span className="flex items-center gap-1.5 text-white/70"><span className="w-2 h-2 rounded-full bg-emerald-300 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]" />Done</span>
+                <span className="flex items-center gap-1.5 text-white/70"><span className="w-2 h-2 rounded-full bg-red-300 shadow-[0_0_0_3px_rgba(239,68,68,0.2)]" />Cancelled</span>
               </div>
-              <button onClick={() => router.push("/calendar")} className="text-xs font-semibold text-primary hover:text-primary-dark transition">View Full →</button>
+              <button onClick={() => router.push("/calendar")} className="text-xs font-semibold text-white/80 hover:text-white transition bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">View Full →</button>
             </div>
           </div>
 
-          {/* Day header row */}
-          <div className="grid grid-cols-7 border-b border-border bg-gradient-to-r from-slate-50/80 to-gray-50/80">
-            {weekDays.map((d) => {
-              const ds = toStr(d);
-              const isToday = ds === todayStr;
-              const isPast = ds < todayStr;
-              return (
-                <div key={ds} className={`flex flex-col items-center py-3 border-r border-border/40 last:border-r-0 transition-colors ${isToday ? "bg-indigo-50/60" : ""}`}>
-                  <span className={`text-[10px] font-bold uppercase tracking-widest ${isToday ? "text-indigo-500" : isPast ? "text-text-muted/40" : "text-text-muted"}`}>
-                    {DAYS_SHORT[d.getDay()]}
-                  </span>
-                  <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center ${
-                    isToday ? "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-300/40" : ""
-                  }`}>
-                    <span className={`text-sm font-bold ${isToday ? "text-white" : isPast ? "text-text-muted/35" : "text-text"}`}>
-                      {d.getDate()}
-                    </span>
-                  </div>
-                  {isToday && <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1 animate-pulse" />}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Events body */}
-          <div className="grid grid-cols-7">
+          {/* Mobile: stacked list view */}
+          <div className="md:hidden divide-y divide-border">
             {weekDays.map((d, idx) => {
               const ds = toStr(d);
               const isToday = ds === todayStr;
               const isPast = ds < todayStr;
               const dayEvents = eventsByDate[ds] ?? [];
+              if (isPast && dayEvents.length === 0) return null;
               return (
-                <div key={ds} className={`border-r border-border/40 last:border-r-0 p-1.5 flex flex-col gap-1.5 h-[280px] ${
-                  isToday ? "bg-indigo-50/30" : isPast ? "bg-gray-50/30" : ""
-                }`}>
-                  {dayEvents.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center opacity-20">
-                      <CalendarIcon className="w-5 h-5 text-text-muted mb-1" />
-                      <p className="text-[9px] text-text-muted font-medium">Free</p>
+                <div key={ds} className={`px-4 py-3 ${isToday ? "bg-indigo-50/40" : ""}`}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${
+                      isToday ? "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-md shadow-indigo-300/40" : "bg-bg border border-border"
+                    }`}>
+                      <span className={`text-[9px] font-bold uppercase leading-none ${isToday ? "text-white/80" : "text-text-muted"}`}>{DAYS_SHORT[d.getDay()]}</span>
+                      <span className={`text-sm font-bold leading-tight ${isToday ? "text-white" : isPast ? "text-text-muted/40" : "text-text"}`}>{d.getDate()}</span>
                     </div>
-                  ) : (
-                    dayEvents.slice(0, 4).map((ev, evIdx) => {
-                      const st = SCHEDULE_STYLES[ev.status] ?? SCHEDULE_STYLES.UPCOMING;
-                      return (
-                        <motion.div
-                          key={ev.id}
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.03 + evIdx * 0.04, duration: 0.2 }}
-                          className={`w-full text-left rounded-lg border p-2 transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 group cursor-default ${st.card}`}
-                        >
-                          <div className={`h-0.5 w-6 rounded-full bg-gradient-to-r ${st.gradient} mb-1.5 group-hover:w-10 transition-all duration-300`} />
-                          <p className="text-[10px] font-bold truncate leading-tight text-gray-800">{ev.className}</p>
-                          <div className="flex items-center gap-1 mt-1">
-                            <Clock className="w-2.5 h-2.5 text-gray-400 flex-shrink-0" />
-                            <p className="text-[9px] text-gray-500 font-medium truncate">
-                              {formatTime12(ev.startTime)} – {formatTime12(ev.endTime)}
-                            </p>
-                          </div>
-                          {ev.location && (
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <MapPin className="w-2.5 h-2.5 text-gray-400 flex-shrink-0" />
-                              <p className="text-[9px] text-gray-500 truncate">{ev.location}</p>
+                    <div className="flex-1">
+                      <span className={`text-xs font-semibold ${isToday ? "text-indigo-600" : "text-text"}`}>
+                        {d.toLocaleDateString("en-US", { weekday: "long" })}
+                      </span>
+                      <span className="text-[10px] text-text-muted ml-2">{dayEvents.length ? `${dayEvents.length} class${dayEvents.length !== 1 ? "es" : ""}` : "Free"}</span>
+                    </div>
+                  </div>
+                  {dayEvents.length > 0 && (
+                    <div className="flex flex-col gap-2 ml-[52px]">
+                      {dayEvents.map((ev) => {
+                        const st = SCHEDULE_STYLES[ev.status] ?? SCHEDULE_STYLES.UPCOMING;
+                        return (
+                          <div key={ev.id} className={`rounded-xl border p-3 ${st.card}`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-bold text-gray-800 truncate">{ev.className}</p>
+                              {ev.grade && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${st.badge}`}>G{ev.grade}</span>}
                             </div>
-                          )}
-                          {ev.grade && (
-                            <span className={`inline-flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full mt-1.5 ${st.badge}`}>
-                              <GraduationCap className="w-2 h-2" /> Grade {ev.grade}
-                            </span>
-                          )}
-                        </motion.div>
-                      );
-                    })
-                  )}
-                  {dayEvents.length > 4 && (
-                    <p className="text-[9px] text-indigo-500 font-bold text-center">+{dayEvents.length - 4} more</p>
+                            <div className="flex items-center gap-3 mt-1.5">
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-gray-400" />
+                                <span className="text-[11px] text-gray-500 font-medium">{formatTime12(ev.startTime)} – {formatTime12(ev.endTime)}</span>
+                              </div>
+                              {ev.location && (
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3 text-gray-400" />
+                                  <span className="text-[11px] text-gray-500 truncate">{ev.location}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
 
-          {/* Footer summary row */}
-          <div className="grid grid-cols-7 border-t border-border/60 bg-gradient-to-r from-slate-50/60 to-gray-50/60">
-            {weekDays.map((d) => {
-              const ds = toStr(d);
-              const isToday = ds === todayStr;
-              const count = (eventsByDate[ds] ?? []).length;
-              return (
-                <div key={`f-${ds}`} className="text-center py-1.5 border-r border-border/40 last:border-r-0">
-                  {count > 0 ? (
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                      isToday ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"
-                    }`}>
-                      {count} class{count !== 1 ? "es" : ""}
+          {/* Desktop: 7-column grid view */}
+          <div className="hidden md:block">
+            {/* Day header row */}
+            <div className="grid grid-cols-7 border-b border-border bg-gradient-to-r from-slate-50/80 to-gray-50/80">
+              {weekDays.map((d) => {
+                const ds = toStr(d);
+                const isToday = ds === todayStr;
+                const isPast = ds < todayStr;
+                return (
+                  <div key={ds} className={`flex flex-col items-center py-3 border-r border-border/40 last:border-r-0 transition-colors ${isToday ? "bg-indigo-50/60" : ""}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${isToday ? "text-indigo-500" : isPast ? "text-text-muted/40" : "text-text-muted"}`}>
+                      {DAYS_SHORT[d.getDay()]}
                     </span>
-                  ) : (
-                    <span className="text-[9px] text-gray-300 font-medium">—</span>
-                  )}
-                </div>
-              );
-            })}
+                    <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center ${
+                      isToday ? "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-300/40" : ""
+                    }`}>
+                      <span className={`text-sm font-bold ${isToday ? "text-white" : isPast ? "text-text-muted/35" : "text-text"}`}>
+                        {d.getDate()}
+                      </span>
+                    </div>
+                    {isToday && <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1 animate-pulse" />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Events body */}
+            <div className="grid grid-cols-7">
+              {weekDays.map((d, idx) => {
+                const ds = toStr(d);
+                const isToday = ds === todayStr;
+                const isPast = ds < todayStr;
+                const dayEvents = eventsByDate[ds] ?? [];
+                return (
+                  <div key={ds} className={`border-r border-border/40 last:border-r-0 p-1.5 flex flex-col gap-1.5 h-[280px] ${
+                    isToday ? "bg-indigo-50/30" : isPast ? "bg-gray-50/30" : ""
+                  }`}>
+                    {dayEvents.length === 0 ? (
+                      <div className="flex-1 flex flex-col items-center justify-center opacity-20">
+                        <CalendarIcon className="w-5 h-5 text-text-muted mb-1" />
+                        <p className="text-[9px] text-text-muted font-medium">Free</p>
+                      </div>
+                    ) : (
+                      dayEvents.slice(0, 4).map((ev, evIdx) => {
+                        const st = SCHEDULE_STYLES[ev.status] ?? SCHEDULE_STYLES.UPCOMING;
+                        return (
+                          <motion.div
+                            key={ev.id}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.03 + evIdx * 0.04, duration: 0.2 }}
+                            className={`w-full text-left rounded-lg border p-2 transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 group cursor-default ${st.card}`}
+                          >
+                            <div className={`h-0.5 w-6 rounded-full bg-gradient-to-r ${st.gradient} mb-1.5 group-hover:w-10 transition-all duration-300`} />
+                            <p className="text-[10px] font-bold truncate leading-tight text-gray-800">{ev.className}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                              <Clock className="w-2.5 h-2.5 text-gray-400 flex-shrink-0" />
+                              <p className="text-[9px] text-gray-500 font-medium truncate">
+                                {formatTime12(ev.startTime)} – {formatTime12(ev.endTime)}
+                              </p>
+                            </div>
+                            {ev.location && (
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <MapPin className="w-2.5 h-2.5 text-gray-400 flex-shrink-0" />
+                                <p className="text-[9px] text-gray-500 truncate">{ev.location}</p>
+                              </div>
+                            )}
+                            {ev.grade && (
+                              <span className={`inline-flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full mt-1.5 ${st.badge}`}>
+                                <GraduationCap className="w-2 h-2" /> Grade {ev.grade}
+                              </span>
+                            )}
+                          </motion.div>
+                        );
+                      })
+                    )}
+                    {dayEvents.length > 4 && (
+                      <p className="text-[9px] text-indigo-500 font-bold text-center">+{dayEvents.length - 4} more</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer summary row */}
+            <div className="grid grid-cols-7 border-t border-border/60 bg-gradient-to-r from-slate-50/60 to-gray-50/60">
+              {weekDays.map((d) => {
+                const ds = toStr(d);
+                const isToday = ds === todayStr;
+                const count = (eventsByDate[ds] ?? []).length;
+                return (
+                  <div key={`f-${ds}`} className="text-center py-1.5 border-r border-border/40 last:border-r-0">
+                    {count > 0 ? (
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                        isToday ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"
+                      }`}>
+                        {count} class{count !== 1 ? "es" : ""}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-gray-300 font-medium">—</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </motion.div>
       </div>

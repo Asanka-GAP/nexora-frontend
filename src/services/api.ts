@@ -2,7 +2,7 @@ import axios from "axios";
 import type {
   ApiResponse, Student, StudentCreateRequest, ClassItem,
   ClassCreateRequest, MarkAttendanceRequest, MarkAttendanceResponse, Schedule,
-  AttendanceRecord, LoginResponse, AdminDashboard, TeacherItem,
+  AttendanceRecord, LoginResponse, AdminDashboard, TeacherItem, TeacherProfile,
 } from "@/lib/types";
 
 const api = axios.create({
@@ -59,7 +59,7 @@ export const getStudents = () =>
 export const createStudent = (data: StudentCreateRequest) =>
   api.post<ApiResponse<Student>>("/students", data).then((r) => r.data.data);
 
-export const updateStudent = (id: string, data: { fullName: string; currentGrade: number; address?: string }) =>
+export const updateStudent = (id: string, data: { fullName: string; currentGrade: number; address?: string; classIds?: string[] }) =>
   api.put<ApiResponse<Student>>(`/students/${id}`, data).then((r) => r.data.data);
 
 export const toggleStudentStatus = (id: string) =>
@@ -144,5 +144,21 @@ export const toggleTeacherStatus = (id: string) =>
 
 export const deleteTeacher = (id: string) =>
   api.delete<ApiResponse<void>>(`/admin/teachers/${id}`);
+
+// Teacher Settings
+export const getTeacherProfile = () =>
+  api.get<ApiResponse<TeacherProfile>>("/settings/profile").then((r) => r.data.data);
+
+export const updateTeacherProfile = (data: { name: string; phone: string; subject: string }) =>
+  api.put<ApiResponse<TeacherProfile>>("/settings/profile", data).then((r) => r.data.data);
+
+export const changeTeacherPassword = (currentPassword: string, newPassword: string) =>
+  api.put<ApiResponse<void>>("/settings/password", { currentPassword, newPassword });
+
+export const sendEmailOtp = (newEmail: string) =>
+  api.post<ApiResponse<void>>("/settings/email/send-otp", { newEmail });
+
+export const changeTeacherEmail = (newEmail: string, otp: string) =>
+  api.put<ApiResponse<TeacherProfile>>("/settings/email", { newEmail, otp }).then((r) => r.data.data);
 
 export default api;

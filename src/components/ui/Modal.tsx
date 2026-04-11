@@ -30,15 +30,25 @@ export default function Modal({ open, onClose, title, children, className }: Mod
           className
         )}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-text">{title}</h2>
+        {title && (
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-text">{title}</h2>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1.5 hover:bg-border/50 transition-colors"
+            >
+              <X className="h-5 w-5 text-text-muted" />
+            </button>
+          </div>
+        )}
+        {!title && (
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 hover:bg-border/50 transition-colors"
+            className="absolute top-4 right-4 z-10 rounded-lg p-1.5 bg-white/10 hover:bg-white/20 transition-colors"
           >
-            <X className="h-5 w-5 text-text-muted" />
+            <X className="h-4 w-4 text-white" />
           </button>
-        </div>
+        )}
         {children}
       </div>
     </div>

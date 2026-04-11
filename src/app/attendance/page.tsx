@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { ScanLine, CheckCircle, Calendar, Users, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AppShell from "@/components/layout/AppShell";
+
 import Button from "@/components/ui/Button";
 import { useFetch } from "@/hooks/useFetch";
 import { getAttendance, getTodayAttendanceCount, getClasses } from "@/services/api";
@@ -77,30 +78,22 @@ export default function AttendancePage() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between">
-            <div><p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Today</p><p className="text-3xl font-bold text-text mt-1">{todayCount ?? 0}</p><p className="text-xs text-emerald-700 font-medium mt-1">Scans today</p></div>
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white shadow-md"><CheckCircle className="w-5 h-5" /></div>
-          </div>
-        </div>
-        <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between">
-            <div><p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Records</p><p className="text-3xl font-bold text-text mt-1">{all.length}</p><p className="text-xs text-text-muted mt-1">{activePreset || "Selected range"}</p></div>
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shadow-md"><Calendar className="w-5 h-5" /></div>
-          </div>
-        </div>
-        <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between">
-            <div><p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Students</p><p className="text-3xl font-bold text-text mt-1">{uniqueStudents}</p><p className="text-xs text-indigo-700 font-medium mt-1">Unique students</p></div>
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-700 flex items-center justify-center text-white shadow-md"><Users className="w-5 h-5" /></div>
-          </div>
-        </div>
-        <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between">
-            <div><p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Classes</p><p className="text-3xl font-bold text-text mt-1">{uniqueClasses}</p><p className="text-xs text-text-muted mt-1">Classes with attendance</p></div>
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shadow-md"><Clock className="w-5 h-5" /></div>
-          </div>
-        </div>
+        {[
+          { label: "TODAY", value: todayCount ?? 0, sub: "Scans today", gradient: "from-emerald-600 to-teal-600", icon: <CheckCircle className="w-5 h-5" /> },
+          { label: "RECORDS", value: all.length, sub: activePreset || "Selected range", gradient: "from-blue-600 to-indigo-600", icon: <Calendar className="w-5 h-5" /> },
+          { label: "STUDENTS", value: uniqueStudents, sub: "Unique students", gradient: "from-violet-600 to-purple-600", icon: <Users className="w-5 h-5" /> },
+          { label: "CLASSES", value: uniqueClasses, sub: "Classes with attendance", gradient: "from-amber-500 to-orange-500", icon: <Clock className="w-5 h-5" /> },
+        ].map((card, i) => (
+          <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+            className={`bg-gradient-to-br ${card.gradient} rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow duration-200 hover:-translate-y-0.5`}>
+            <div className="flex items-start justify-between mb-4">
+              <p className="text-xs font-bold text-white/70 uppercase tracking-widest">{card.label}</p>
+              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-white">{card.icon}</div>
+            </div>
+            <p className="text-3xl font-bold text-white leading-tight">{card.value}</p>
+            <p className="text-xs text-white/60 mt-1">{card.sub}</p>
+          </motion.div>
+        ))}
       </div>
 
       {/* Filters */}
@@ -111,8 +104,8 @@ export default function AttendancePage() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by student name, code, class..." className="w-full pl-10 pr-4 py-2.5 border border-border rounded-xl text-sm text-text bg-bg-card placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
           </div>
           {/* Class filter */}
-          <div className="relative">
-            <button onClick={() => setClassOpen(!classOpen)} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${classFilter ? "border-primary/30 bg-primary/5 text-primary shadow-sm" : "border-border text-text-muted hover:bg-bg"}`}>
+          <div className="relative w-full sm:w-auto">
+            <button onClick={() => setClassOpen(!classOpen)} className={`w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${classFilter ? "border-primary/30 bg-primary/5 text-primary shadow-sm" : "border-border text-text-muted hover:bg-bg"}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`w-4 h-4 ${classFilter ? "text-primary" : "text-text-muted"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
               <span className="text-xs">{classFilter ? (classes ?? []).find(c => c.id === classFilter)?.name ?? "Class" : "All Classes"}</span>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3.5 h-3.5 text-text-muted transition-transform ${classOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
@@ -121,7 +114,7 @@ export default function AttendancePage() {
               {classOpen && (<>
                 <div className="fixed inset-0 z-30" onClick={() => { setClassOpen(false); setClassSearch(""); }} />
                 <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-2 z-40 bg-bg-card rounded-2xl border border-border shadow-xl w-[260px] overflow-hidden">
+                  className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-40 bg-bg-card rounded-2xl border border-border shadow-xl w-[calc(100vw-3.5rem)] sm:w-[260px] overflow-hidden">
                   <div className="p-2 border-b border-border">
                     <div className="relative">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
@@ -148,8 +141,8 @@ export default function AttendancePage() {
             </AnimatePresence>
           </div>
           {/* Date range */}
-          <div className="relative">
-            <button onClick={() => setDateOpen(!dateOpen)} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${activePreset ? "border-primary/30 bg-primary/5 text-primary shadow-sm" : "border-border text-text-muted hover:bg-bg"}`}>
+          <div className="relative w-full sm:w-auto">
+            <button onClick={() => setDateOpen(!dateOpen)} className={`w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${activePreset ? "border-primary/30 bg-primary/5 text-primary shadow-sm" : "border-border text-text-muted hover:bg-bg"}`}>
               <Calendar className={`w-4 h-4 ${activePreset ? "text-primary" : "text-text-muted"}`} />
               <span className="text-xs">{dateLabel}</span>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3.5 h-3.5 text-text-muted transition-transform ${dateOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
@@ -158,10 +151,10 @@ export default function AttendancePage() {
               {dateOpen && (<>
                 <div className="fixed inset-0 z-30" onClick={() => setDateOpen(false)} />
                 <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-2 z-40 bg-bg-card rounded-2xl border border-border shadow-xl w-[400px] overflow-hidden">
+                  className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-40 bg-bg-card rounded-2xl border border-border shadow-xl w-[calc(100vw-3.5rem)] sm:w-[400px] overflow-hidden">
                   <div className="p-4 border-b border-border">
                     <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-3 px-1">Quick Select</p>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {PRESETS.map(p => (<button key={p.label} onClick={() => { setDateFrom(p.from()); setDateTo(p.to()); }} className={`px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${activePreset === p.label ? "text-white shadow-sm bg-primary" : "bg-bg text-text-muted hover:bg-border/50"}`}>{p.label}</button>))}
                     </div>
                   </div>
@@ -184,9 +177,7 @@ export default function AttendancePage() {
       </div>
 
       {/* Table */}
-      {loading ? (
-        <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-8"><div className="animate-pulse space-y-4">{[...Array(5)].map((_, i) => <div key={i} className="h-10 bg-border/50 rounded-lg" />)}</div></div>
-      ) : !filtered.length ? (
+      {!filtered.length && !loading ? (
         <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-12 text-center">
           <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center"><CheckCircle className="w-7 h-7 text-primary/40" /></div>
           <p className="text-sm font-medium text-text-muted">No attendance records found</p>

@@ -1,17 +1,17 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Users, UserPlus, Phone, QrCode, Download, Printer } from "lucide-react";
+import { Plus, Trash2, Pencil, Users, UserPlus, Phone, QrCode, Download, Printer, GraduationCap, MapPin, BookOpen, User, Search, X, ChevronDown } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { toPng } from "html-to-image";
 import AppShell from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
 import Button from "@/components/ui/Button";
-import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
 import { useFetch } from "@/hooks/useFetch";
-import { getStudents, createStudent, updateStudent, deleteStudentApi, toggleStudentStatus, addStudentContact, deleteStudentContact } from "@/services/api";
-import type { Student } from "@/lib/types";
+import { getStudents, getClasses, createStudent, updateStudent, deleteStudentApi, toggleStudentStatus, addStudentContact, deleteStudentContact } from "@/services/api";
+import type { Student, ClassItem } from "@/lib/types";
 
 interface ParentRow { contactName: string; phone: string; relationship: string; isPrimary: boolean; }
 const emptyForm = { fullName: "", currentGrade: 1, address: "" };
@@ -25,6 +25,8 @@ export default function StudentsPage() {
   const cardRef = useRef<HTMLDivElement>(null);
   const fetchStudents = useCallback(() => getStudents(), []);
   const { data: students, loading, refetch } = useFetch(fetchStudents);
+  const fetchClasses = useCallback(() => getClasses(), []);
+  const { data: classes } = useFetch(fetchClasses);
   const [search, setSearch] = useState("");
   const [filterGrade, setFilterGrade] = useState<number | "ALL">("ALL");
   const [filterStatus, setFilterStatus] = useState<StatusFilter>("ALL");
@@ -36,6 +38,9 @@ export default function StudentsPage() {
   const [form, setForm] = useState(emptyForm);
   const [parents, setParents] = useState<ParentRow[]>([{ ...emptyParent }]);
   const [saving, setSaving] = useState(false);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [classDropdownOpen, setClassDropdownOpen] = useState(false);
+  const [classSearchQuery, setClassSearchQuery] = useState("");
 
   // Contact management
   const [contactStudent, setContactStudent] = useState<Student | null>(null);
@@ -150,8 +155,8 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const openCreate = () => { setEditingStudent(null); setForm(emptyForm); setParents([{ ...emptyParent }]); setModalOpen(true); };
-  const openEdit = (s: Student) => { setEditingStudent(s); setForm({ fullName: s.fullName, currentGrade: s.currentGrade, address: s.address || "" }); setParents([]); setModalOpen(true); };
+  const openCreate = () => { setEditingStudent(null); setForm(emptyForm); setParents([{ ...emptyParent }]); setSelectedClassIds([]); setClassDropdownOpen(false); setClassSearchQuery(""); setModalOpen(true); };
+  const openEdit = (s: Student) => { setEditingStudent(s); setForm({ fullName: s.fullName, currentGrade: s.currentGrade, address: s.address || "" }); setParents([]); setSelectedClassIds(s.enrolledClasses?.map(c => c.id) ?? []); setClassDropdownOpen(false); setClassSearchQuery(""); setModalOpen(true); };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,11 +164,11 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
     setSaving(true);
     try {
       if (editingStudent) {
-        await updateStudent(editingStudent.id, { fullName: form.fullName, currentGrade: Number(form.currentGrade), address: form.address || undefined });
+        await updateStudent(editingStudent.id, { fullName: form.fullName, currentGrade: Number(form.currentGrade), address: form.address || undefined, classIds: selectedClassIds });
         toast.success("Student updated");
       } else {
         const validParents = parents.filter(p => p.contactName && p.phone);
-        await createStudent({ fullName: form.fullName, currentGrade: Number(form.currentGrade), address: form.address || undefined, contacts: validParents });
+        await createStudent({ fullName: form.fullName, currentGrade: Number(form.currentGrade), address: form.address || undefined, contacts: validParents, classIds: selectedClassIds });
         toast.success("Student added");
       }
       setModalOpen(false); setEditingStudent(null);
@@ -257,9 +262,7 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
       </div>
 
       {/* Table */}
-      {loading ? (
-        <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-8"><div className="animate-pulse space-y-4">{[...Array(5)].map((_, i) => <div key={i} className="h-10 bg-border/50 rounded-lg" />)}</div></div>
-      ) : !filtered.length ? (
+      {!filtered.length && !loading ? (
         <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-12 text-center">
           <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center"><Users className="w-7 h-7 text-primary/40" /></div>
           <p className="text-sm font-medium text-text-muted">No students found</p>
@@ -269,7 +272,7 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
           {/* Desktop */}
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
-              <thead><tr className="border-b border-border">{["Student", "Code", "Grade", "Parents", "Status", ""].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
+              <thead><tr className="border-b border-border">{["Student", "Code", "Grade", "Classes", "Enrolled", "Status", ""].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
               <tbody>
                 {paginated.map(s => (
                   <tr key={s.id} className="border-b border-border/50 hover:bg-bg/50 transition-colors">
@@ -279,7 +282,16 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                     </td>
                     <td className="px-5 py-3.5 text-sm text-text-muted font-mono">{s.studentCode}</td>
                     <td className="px-5 py-3.5"><span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-secondary/15 text-cyan-800">Grade {s.currentGrade}</span></td>
-                    <td className="px-5 py-3.5 text-sm text-text-muted">{s.contacts?.length || 0}</td>
+                    <td className="px-5 py-3.5">
+                      {s.enrolledClasses?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {s.enrolledClasses.map(c => (
+                            <span key={c.id} className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700">{c.name}</span>
+                          ))}
+                        </div>
+                      ) : <span className="text-xs text-text-muted">—</span>}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-text-muted">{new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <button onClick={() => handleToggle(s)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${s.isActive ? "bg-emerald-500" : "bg-slate-300"}`}>
@@ -324,9 +336,16 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                     </div>
                     <div className="grid grid-cols-3 gap-2 mb-2">
                       <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Grade</p><p className="text-xs font-medium text-text mt-0.5">{s.currentGrade}</p></div>
-                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Parents</p><p className="text-xs font-medium text-text mt-0.5">{s.contacts?.length || 0}</p></div>
-                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Address</p><p className="text-xs font-medium text-text mt-0.5 truncate">{s.address || "—"}</p></div>
+                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Enrolled</p><p className="text-xs font-medium text-text mt-0.5">{new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p></div>
+                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Classes</p><p className="text-xs font-medium text-text mt-0.5">{s.enrolledClasses?.length || 0}</p></div>
                     </div>
+                    {s.enrolledClasses?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {s.enrolledClasses.map(c => (
+                          <span key={c.id} className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700">{c.name}</span>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <button onClick={() => setQrStudent(s)} className="flex-1 flex items-center justify-center py-2 rounded-lg text-primary bg-primary/10 hover:bg-primary/20 transition-all"><QrCode className="w-4 h-4" /></button>
                       <button onClick={() => setContactStudent(s)} className="flex-1 flex items-center justify-center py-2 rounded-lg text-primary bg-primary/10 hover:bg-primary/20 transition-all"><Phone className="w-4 h-4" /></button>
@@ -355,51 +374,191 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
       )}
 
       {/* Create / Edit Modal */}
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditingStudent(null); }} title={editingStudent ? "Edit Student" : "Add Student"}>
-        <form onSubmit={handleSave} className="space-y-4">
-          <Input id="sname" label="Full Name" placeholder="John Doe" value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} />
-          <div className="grid grid-cols-2 gap-4">
-            <Input id="sgrade" label="Grade" type="number" value={String(form.currentGrade)} onChange={e => setForm({ ...form, currentGrade: Number(e.target.value) })} />
-            <Input id="saddr" label="Address (optional)" placeholder="123 Main St" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditingStudent(null); setClassDropdownOpen(false); }} title="" className="max-w-xl p-0">
+        <form onSubmit={handleSave}>
+          {/* Header */}
+          <div className="bg-gradient-to-r from-primary to-primary-dark px-6 py-5 rounded-t-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center">
+                {editingStudent
+                  ? <span className="text-white font-bold text-lg">{editingStudent.fullName.charAt(0).toUpperCase()}</span>
+                  : <UserPlus className="w-5 h-5 text-white" />}
+              </div>
+              <div>
+                <h2 className="text-white font-semibold text-base">{editingStudent ? "Edit Student" : "New Student"}</h2>
+                <p className="text-white/60 text-xs mt-0.5">{editingStudent ? editingStudent.studentCode : "Fill in the details below"}</p>
+              </div>
+            </div>
           </div>
 
-          {/* Parents — only for create */}
-          {!editingStudent && (
-            <div className="border-t border-border pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-medium text-text">Parents / Guardians</p>
-                <button type="button" onClick={addParentRow} className="text-xs text-primary font-medium hover:underline">+ Add Parent</button>
-              </div>
-              {parents.map((p, idx) => (
-                <div key={idx} className="rounded-xl border border-border p-3 mb-3 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-text-muted">Parent {idx + 1}</p>
-                    {parents.length > 1 && <button type="button" onClick={() => removeParentRow(idx)} className="text-xs text-danger hover:underline">Remove</button>}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Input id={`pname${idx}`} label="Name" placeholder="Jane Doe" value={p.contactName} onChange={e => updateParentRow(idx, "contactName", e.target.value)} />
-                    <Input id={`pphone${idx}`} label="Phone" placeholder="+94 77 123 4567" value={p.phone} onChange={e => updateParentRow(idx, "phone", e.target.value)} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-text mb-1.5">Relationship</label>
-                      <select value={p.relationship} onChange={e => updateParentRow(idx, "relationship", e.target.value)} className="w-full rounded-xl border border-border bg-bg-card px-4 py-2.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/50">
-                        <option value="Parent">Parent</option><option value="Father">Father</option><option value="Mother">Mother</option><option value="Guardian">Guardian</option><option value="Other">Other</option>
-                      </select>
-                    </div>
-                    <div className="flex items-end pb-1">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={p.isPrimary} onChange={e => updateParentRow(idx, "isPrimary", e.target.checked)} className="rounded border-border text-primary focus:ring-primary/50" />
-                        <span className="text-sm text-text">Primary contact</span>
-                      </label>
-                    </div>
+          <div className={`px-6 py-5 space-y-5 max-h-[60vh] ${classDropdownOpen ? "overflow-visible" : "overflow-y-auto"}`}>
+            {/* Basic Info */}
+            <div>
+              <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-3">Student Information</p>
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="sname" className="block text-xs font-semibold text-text-muted mb-1.5">Full Name</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted/50 pointer-events-none" />
+                    <input id="sname" value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} placeholder="John Doe"
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
                   </div>
                 </div>
-              ))}
+                <div>
+                  <label htmlFor="sgrade" className="block text-xs font-semibold text-text-muted mb-1.5">Grade</label>
+                  <div className="relative">
+                    <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted/50 pointer-events-none" />
+                    <input id="sgrade" type="number" value={String(form.currentGrade)} onChange={e => setForm({ ...form, currentGrade: Number(e.target.value) })}
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-bg-card text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="saddr" className="block text-xs font-semibold text-text-muted mb-1.5">Address <span className="text-text-muted/40">(optional)</span></label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-3 w-4 h-4 text-text-muted/50 pointer-events-none" />
+                    <textarea id="saddr" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="123 Main St" rows={2}
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none" />
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
 
-          <div className="flex justify-end gap-3 pt-2">
+            {/* Class Assignment — Searchable Dropdown */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Assign Classes</p>
+                {selectedClassIds.length > 0 && (
+                  <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">{selectedClassIds.length} selected</span>
+                )}
+              </div>
+              {/* Selected badges */}
+              {selectedClassIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {selectedClassIds.map(id => {
+                    const cls = (classes ?? []).find(c => c.id === id);
+                    if (!cls) return null;
+                    return (
+                      <span key={id} className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary/10 text-primary">
+                        {cls.name}
+                        <button type="button" onClick={() => setSelectedClassIds(selectedClassIds.filter(cid => cid !== id))} className="hover:bg-primary/20 rounded-full p-0.5 transition-colors">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Dropdown trigger */}
+              <div className="relative">
+                <button type="button" onClick={() => { setClassDropdownOpen(!classDropdownOpen); setClassSearchQuery(""); }}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                    classDropdownOpen ? "border-primary ring-2 ring-primary/20" : "border-border hover:border-primary/30"
+                  } bg-bg-card`}>
+                  <div className="flex items-center gap-2.5">
+                    <BookOpen className="w-4 h-4 text-text-muted/50" />
+                    <span className={selectedClassIds.length ? "text-text" : "text-text-muted"}>
+                      {selectedClassIds.length ? `${selectedClassIds.length} class${selectedClassIds.length > 1 ? "es" : ""} assigned` : "Select classes..."}
+                    </span>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${classDropdownOpen ? "rotate-180" : ""}`} />
+                </button>
+                <AnimatePresence>
+                  {classDropdownOpen && (<>
+                    <div className="fixed inset-0 z-30" onClick={() => { setClassDropdownOpen(false); setClassSearchQuery(""); }} />
+                    <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.15 }}
+                      className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-bg-card rounded-xl border border-border shadow-xl overflow-hidden">
+                      <div className="p-2 border-b border-border">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                          <input value={classSearchQuery} onChange={e => setClassSearchQuery(e.target.value)} placeholder="Search classes..." autoFocus
+                            className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-bg text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                        </div>
+                      </div>
+                      <div className="max-h-[180px] overflow-y-auto p-1.5">
+                        {(classes ?? []).length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-6 text-text-muted">
+                            <BookOpen className="w-5 h-5 opacity-30 mb-1" />
+                            <p className="text-xs">No classes available</p>
+                          </div>
+                        ) : (() => {
+                          const filteredClasses = (classes ?? []).filter(c => !classSearchQuery.trim() || c.name.toLowerCase().includes(classSearchQuery.toLowerCase()));
+                          return filteredClasses.length === 0 ? (
+                            <p className="text-sm text-text-muted text-center py-4">No classes found</p>
+                          ) : filteredClasses.map(c => {
+                            const selected = selectedClassIds.includes(c.id);
+                            return (
+                              <button type="button" key={c.id} onClick={() => setSelectedClassIds(selected ? selectedClassIds.filter(id => id !== c.id) : [...selectedClassIds, c.id])}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${selected ? "bg-primary/[0.07]" : "hover:bg-bg/80"}`}>
+                                <div className={`w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                  selected ? "bg-primary border-primary" : "border-border bg-bg-card"
+                                }`} style={{ width: 18, height: 18 }}>
+                                  {selected && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                </div>
+                                <span className={`text-sm font-medium flex-1 ${selected ? "text-primary" : "text-text"}`}>{c.name}</span>
+                                {c.grade && <span className="text-[10px] font-semibold text-text-muted bg-bg px-2 py-0.5 rounded-md">G{c.grade}</span>}
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </motion.div>
+                  </>)}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Parents — only for create */}
+            {!editingStudent && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Parents / Guardians</p>
+                  <button type="button" onClick={addParentRow} className="text-[11px] font-semibold text-primary hover:text-primary-dark transition flex items-center gap-1">
+                    <Plus className="w-3 h-3" /> Add
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {parents.map((p, idx) => (
+                    <div key={idx} className="rounded-xl border border-border bg-bg/30 p-3.5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <span className="text-[10px] font-bold text-primary">{idx + 1}</span>
+                          </div>
+                          <p className="text-xs font-semibold text-text">Parent {idx + 1}</p>
+                        </div>
+                        {parents.length > 1 && <button type="button" onClick={() => removeParentRow(idx)} className="text-[10px] font-semibold text-danger hover:text-danger/80 transition">Remove</button>}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-text-muted mb-1">Name</label>
+                          <input value={p.contactName} onChange={e => updateParentRow(idx, "contactName", e.target.value)} placeholder="Jane Doe"
+                            className="w-full px-3 py-2 rounded-lg border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-text-muted mb-1">Phone</label>
+                          <input value={p.phone} onChange={e => updateParentRow(idx, "phone", e.target.value)} placeholder="+94 77 123 4567"
+                            className="w-full px-3 py-2 rounded-lg border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <select value={p.relationship} onChange={e => updateParentRow(idx, "relationship", e.target.value)}
+                          className="flex-1 rounded-lg border border-border bg-bg-card px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20">
+                          <option value="Parent">Parent</option><option value="Father">Father</option><option value="Mother">Mother</option><option value="Guardian">Guardian</option><option value="Other">Other</option>
+                        </select>
+                        <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                          <input type="checkbox" checked={p.isPrimary} onChange={e => updateParentRow(idx, "isPrimary", e.target.checked)} className="rounded border-border text-primary focus:ring-primary/50" />
+                          <span className="text-xs text-text-muted font-medium">Primary</span>
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-bg/40">
             <Button variant="ghost" type="button" onClick={() => { setModalOpen(false); setEditingStudent(null); }}>Cancel</Button>
             <Button type="submit" loading={saving}>{editingStudent ? "Update Student" : "Add Student"}</Button>
           </div>
@@ -407,48 +566,104 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
       </Modal>
 
       {/* Contact Management Modal */}
-      <Modal open={!!contactStudent} onClose={() => setContactStudent(null)} title={`Contacts — ${contactStudent?.fullName ?? ""}`}>
-        <div className="space-y-4">
-          {contactStudent?.contacts?.length ? (
-            <div className="space-y-2">
-              {contactStudent.contacts.map(c => (
-                <div key={c.id} className="flex items-center justify-between rounded-xl bg-bg border border-border px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-text">{c.contactName} {c.isPrimary && <span className="text-[10px] font-bold text-primary ml-1">PRIMARY</span>}</p>
-                    <p className="text-xs text-text-muted">{c.phone} · {c.relationship}</p>
-                  </div>
-                  <button onClick={() => handleDeleteContact(c.id)} className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
-              ))}
+      <Modal open={!!contactStudent} onClose={() => setContactStudent(null)} title="" className="max-w-lg p-0">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-5 rounded-t-2xl">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center">
+              <Phone className="w-5 h-5 text-white" />
             </div>
-          ) : (
-            <p className="text-sm text-text-muted text-center py-4">No contacts added yet</p>
-          )}
+            <div>
+              <h2 className="text-white font-semibold text-base">Contacts</h2>
+              <p className="text-white/60 text-xs mt-0.5">{contactStudent?.fullName}</p>
+            </div>
+          </div>
+        </div>
 
-          <div className="border-t border-border pt-4">
-            <p className="text-sm font-medium text-text mb-3">Add Contact</p>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Input id="ncname" label="Name" placeholder="Jane Doe" value={newContact.contactName} onChange={e => setNewContact({ ...newContact, contactName: e.target.value })} />
-                <Input id="ncphone" label="Phone" placeholder="+94 77 123 4567" value={newContact.phone} onChange={e => setNewContact({ ...newContact, phone: e.target.value })} />
+        <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
+          {/* Existing Contacts */}
+          <div>
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-3">Saved Contacts</p>
+            {contactStudent?.contacts?.length ? (
+              <div className="space-y-2">
+                {contactStudent.contacts.map((c, i) => (
+                  <div key={c.id} className="flex items-center gap-3 rounded-xl border border-border bg-bg/50 px-4 py-3 group hover:border-primary/20 transition-all">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-bold text-primary">{i + 1}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-text truncate">{c.contactName}</p>
+                        {c.isPrimary && <span className="text-[9px] font-bold text-white bg-primary px-1.5 py-0.5 rounded-md">PRIMARY</span>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-text-muted">{c.phone}</span>
+                        <span className="text-text-muted/30">·</span>
+                        <span className="text-xs text-text-muted">{c.relationship}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => handleDeleteContact(c.id)} className="p-2 rounded-lg text-text-muted/40 hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 rounded-xl border border-dashed border-border">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-2">
+                  <Users className="w-5 h-5 text-primary/40" />
+                </div>
+                <p className="text-xs font-medium text-text-muted">No contacts added yet</p>
+              </div>
+            )}
+          </div>
+
+          {/* Add New Contact */}
+          <div>
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-3">Add New Contact</p>
+            <div className="rounded-xl border border-border bg-bg/30 p-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-text mb-1.5">Relationship</label>
-                  <select value={newContact.relationship} onChange={e => setNewContact({ ...newContact, relationship: e.target.value })} className="w-full rounded-xl border border-border bg-bg-card px-4 py-2.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/50">
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Name</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted/50 pointer-events-none" />
+                    <input value={newContact.contactName} onChange={e => setNewContact({ ...newContact, contactName: e.target.value })} placeholder="Jane Doe"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Phone</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted/50 pointer-events-none" />
+                    <input value={newContact.phone} onChange={e => setNewContact({ ...newContact, phone: e.target.value })} placeholder="+94 77 123 4567"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Relationship</label>
+                  <select value={newContact.relationship} onChange={e => setNewContact({ ...newContact, relationship: e.target.value })}
+                    className="w-full rounded-xl border border-border bg-bg-card px-3 py-2.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
                     <option value="Parent">Parent</option><option value="Father">Father</option><option value="Mother">Mother</option><option value="Guardian">Guardian</option><option value="Other">Other</option>
                   </select>
                 </div>
-                <div className="flex items-end pb-1">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={newContact.isPrimary} onChange={e => setNewContact({ ...newContact, isPrimary: e.target.checked })} className="rounded border-border text-primary focus:ring-primary/50" />
-                    <span className="text-sm text-text">Primary</span>
-                  </label>
-                </div>
+                <label className="flex items-center gap-2 cursor-pointer pb-2.5 flex-shrink-0">
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                    newContact.isPrimary ? "bg-primary border-primary" : "border-border bg-bg-card"
+                  }`}>
+                    {newContact.isPrimary && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                  </div>
+                  <input type="checkbox" checked={newContact.isPrimary} onChange={e => setNewContact({ ...newContact, isPrimary: e.target.checked })} className="sr-only" />
+                  <span className="text-xs font-medium text-text-muted">Primary</span>
+                </label>
               </div>
-              <Button className="w-full" onClick={handleAddContact} loading={addingContact}><UserPlus className="h-4 w-4" /> Add Contact</Button>
             </div>
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-bg/40">
+          <Button variant="ghost" onClick={() => setContactStudent(null)}>Close</Button>
+          <Button onClick={handleAddContact} loading={addingContact}><UserPlus className="h-4 w-4" /> Add Contact</Button>
         </div>
       </Modal>
 

@@ -210,9 +210,7 @@ export default function SchedulePage() {
       </div>
 
       {/* Table */}
-      {loading ? (
-        <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-8"><div className="animate-pulse space-y-4">{[...Array(5)].map((_, i) => <div key={i} className="h-10 bg-border/50 rounded-lg" />)}</div></div>
-      ) : !filtered.length ? (
+      {!filtered.length && !loading ? (
         <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-12 text-center">
           <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center"><Calendar className="w-7 h-7 text-primary/40" /></div>
           <p className="text-sm font-medium text-text-muted">No sessions found</p>
@@ -222,15 +220,18 @@ export default function SchedulePage() {
         <div className="bg-bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
-              <thead><tr className="border-b border-border">{["Date", "Class", "Grade", "Time", "Location", "Status", ""].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
+              <thead><tr className="border-b border-border">{["Date", "Class", "Grade", "Time", "Status", ""].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
               <tbody>
                 {paginated.map(s => (
                   <tr key={s.id} className="border-b border-border/50 hover:bg-bg/50 transition-colors">
                     <td className="px-5 py-3.5 text-sm font-medium text-text">{new Date(s.sessionDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</td>
-                    <td className="px-5 py-3.5 text-sm text-text">{s.className}</td>
+                    <td className="px-5 py-3.5">
+                      <p className="text-sm text-text">{s.className}</p>
+                      {s.location && <p className="text-xs text-text-muted truncate max-w-[200px]">{s.location}</p>}
+                    </td>
                     <td className="px-5 py-3.5"><span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-secondary/15 text-cyan-800">Grade {s.grade}</span></td>
                     <td className="px-5 py-3.5 text-sm text-text-muted">{s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}</td>
-                    <td className="px-5 py-3.5 text-sm text-text-muted">{s.location || "—"}</td>
+
                     <td className="px-5 py-3.5"><span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${statusBadge(s.status)}`}>{s.status}</span></td>
                     <td className="px-5 py-3.5">
                       {s.status === "UPCOMING" && (<button onClick={() => setCancelTarget(s)} className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-all" title="Cancel"><XCircle className="w-4 h-4" /></button>)}
