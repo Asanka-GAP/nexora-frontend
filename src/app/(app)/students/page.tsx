@@ -1,17 +1,17 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Users, UserPlus, Phone, QrCode, Download, Printer, GraduationCap, MapPin, BookOpen, User, Search, X, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Pencil, Users, UserPlus, Phone, QrCode, Download, Printer, GraduationCap, MapPin, BookOpen, User, Search, X, ChevronDown, UserCheck, UserX, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { toPng } from "html-to-image";
-import AppShell from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useFetch } from "@/hooks/useFetch";
 import { getStudents, getClasses, createStudent, updateStudent, deleteStudentApi, toggleStudentStatus, addStudentContact, deleteStudentContact } from "@/services/api";
 import type { Student, ClassItem } from "@/lib/types";
+import PageSkeleton from "@/components/ui/PageSkeleton";
 
 interface ParentRow { contactName: string; phone: string; relationship: string; isPrimary: boolean; }
 const emptyForm = { fullName: "", currentGrade: 1, address: "" };
@@ -24,7 +24,7 @@ export default function StudentsPage() {
   const { user } = useAuth();
   const cardRef = useRef<HTMLDivElement>(null);
   const fetchStudents = useCallback(() => getStudents(), []);
-  const { data: students, loading, refetch } = useFetch(fetchStudents);
+  const { data: students, setData: setStudents, loading, refetch } = useFetch(fetchStudents);
   const fetchClasses = useCallback(() => getClasses(), []);
   const { data: classes } = useFetch(fetchClasses);
   const [search, setSearch] = useState("");
@@ -191,8 +191,10 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
   };
 
   const handleToggle = async (s: Student) => {
-    try { await toggleStudentStatus(s.id); toast.success(s.isActive ? "Student deactivated" : "Student activated"); refetch(); }
-    catch { toast.error("Failed to update status"); }
+    // Optimistic update
+    setStudents(prev => prev ? prev.map(st => st.id === s.id ? { ...st, isActive: !st.isActive } : st) : prev);
+    try { await toggleStudentStatus(s.id); toast.success(s.isActive ? "Student deactivated" : "Student activated"); }
+    catch { toast.error("Failed to update status"); setStudents(prev => prev ? prev.map(st => st.id === s.id ? { ...st, isActive: s.isActive } : st) : prev); }
   };
 
   const handleAddContact = async () => {
@@ -226,11 +228,44 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
     .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
     .reduce<(number | string)[]>((acc, p, idx, arr) => { if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []);
 
+  const activeCount = all.filter(s => s.isActive).length;
+  const inactiveCount = all.length - activeCount;
+  const totalContacts = all.reduce((sum, s) => sum + (s.contacts?.length ?? 0), 0);
+  const totalEnrollments = all.reduce((sum, s) => sum + (s.enrolledClasses?.length ?? 0), 0);
+
+  if (loading && !students) return <PageSkeleton />;
+
   return (
-    <AppShell title="Students">
+    <>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div><h2 className="text-lg font-semibold text-text">All Students</h2><p className="text-xs text-text-muted mt-0.5">{all.length} students total</p></div>
         <Button onClick={openCreate}><Plus className="h-4 w-4" /> Add Student</Button>
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {[
+          { label: "TOTAL", value: all.length, sub: "All students", gradient: "from-[#4F46E5] to-[#3730A3]", accentColor: "#4F46E5", icon: <Users className="w-5 h-5" /> },
+          { label: "ACTIVE", value: activeCount, sub: `${all.length ? Math.round((activeCount / all.length) * 100) : 0}% of total`, gradient: "from-emerald-500 to-emerald-600", accentColor: "#10b981", icon: <UserCheck className="w-5 h-5" /> },
+          { label: "GRADES", value: grades.length, sub: `${grades.length ? `Grade ${grades[0]}–${grades[grades.length - 1]}` : "None"}`, gradient: "from-amber-500 to-orange-500", accentColor: "#f59e0b", icon: <Layers className="w-5 h-5" /> },
+          { label: "ENROLLMENTS", value: totalEnrollments, sub: `${all.length ? (totalEnrollments / all.length).toFixed(1) : 0} avg per student`, gradient: "from-violet-500 to-purple-600", accentColor: "#8b5cf6", icon: <BookOpen className="w-5 h-5" /> },
+        ].map((card, i) => (
+          <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+            className="relative bg-white rounded-2xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] transition-all duration-200 overflow-hidden group">
+            <svg className="absolute bottom-0 right-0 w-28 h-16 opacity-[0.06] group-hover:opacity-[0.10] transition-opacity" viewBox="0 0 120 60" fill="none">
+              <path d="M0 55 Q20 45 30 35 T60 20 T90 30 T120 10" stroke={card.accentColor} strokeWidth="3" fill="none" />
+              <path d="M0 55 Q20 45 30 35 T60 20 T90 30 T120 10 V60 H0 Z" fill={card.accentColor} opacity="0.3" />
+            </svg>
+            <div className="relative">
+              <div className="flex items-start justify-between mb-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</p>
+                <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-white shadow-md`}>{card.icon}</div>
+              </div>
+              <p className="text-2xl font-bold text-slate-800 leading-tight">{card.value}</p>
+              <p className="text-[11px] text-slate-400 mt-2">{card.sub}</p>
+            </div>
+          </motion.div>
+        ))}
       </div>
 
       {/* Filters */}
@@ -247,18 +282,23 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
             </div>
           )}
         </div>
-        <div className="flex flex-wrap gap-1.5 mt-3">
+        <div className="flex flex-wrap items-center gap-3 mt-3">
+          <div className="flex items-center bg-slate-100/80 rounded-xl p-0.5">
           {(["ALL", "ACTIVE", "INACTIVE"] as StatusFilter[]).map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)} className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${filterStatus === s ? "text-white shadow-md bg-primary" : "bg-bg text-text-muted hover:bg-border/50"}`}>{s === "ALL" ? "All Status" : s}</button>
+            <button key={s} onClick={() => setFilterStatus(s)} className={`relative px-3.5 py-1.5 rounded-[10px] text-xs font-semibold transition-all whitespace-nowrap ${filterStatus === s ? "text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`} style={filterStatus === s ? { background: s === "INACTIVE" ? "linear-gradient(135deg, #EF4444, #DC2626)" : s === "ACTIVE" ? "linear-gradient(135deg, #10B981, #059669)" : "linear-gradient(135deg, #4F46E5, #3730A3)" } : {}}>
+              {s === "ALL" ? "All" : s === "ACTIVE" ? "● Active" : "● Inactive"}
+            </button>
           ))}
-        </div>
-        {grades.length > 1 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {(["ALL" as const, ...grades]).map(g => (
-              <button key={g} onClick={() => setFilterGrade(g)} className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap ${filterGrade === g ? "bg-secondary/15 text-cyan-800" : "text-text-muted hover:bg-border/50"}`}>{g === "ALL" ? "All Grades" : `Grade ${g}`}</button>
-            ))}
           </div>
-        )}
+          {grades.length > 1 && (<>
+            <div className="w-px h-5 bg-slate-200 hidden sm:block" />
+            <div className="flex items-center bg-slate-100/80 rounded-xl p-0.5">
+            {(["ALL" as const, ...grades]).map(g => (
+              <button key={g} onClick={() => setFilterGrade(g)} className={`px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all whitespace-nowrap ${filterGrade === g ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>{g === "ALL" ? "All" : `G${g}`}</button>
+            ))}
+            </div>
+          </>)}
+        </div>
       </div>
 
       {/* Table */}
@@ -272,7 +312,7 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
           {/* Desktop */}
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
-              <thead><tr className="border-b border-border">{["Student", "Code", "Grade", "Classes", "Enrolled", "Status", ""].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
+              <thead><tr className="border-b border-border">{["Student", "Code", "Grade", "Classes", "Join Date", "Status", "Action"].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
               <tbody>
                 {paginated.map(s => (
                   <tr key={s.id} className="border-b border-border/50 hover:bg-bg/50 transition-colors">
@@ -294,7 +334,7 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                     <td className="px-5 py-3.5 text-sm text-text-muted">{new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
-                        <button onClick={() => handleToggle(s)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${s.isActive ? "bg-emerald-500" : "bg-slate-300"}`}>
+                        <button onClick={() => handleToggle(s)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${s.isActive ? "bg-emerald-500" : "bg-red-500"}`}>
                           <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${s.isActive ? "translate-x-6" : "translate-x-1"}`} />
                         </button>
                         <span className={`text-xs font-semibold ${s.isActive ? "text-emerald-700" : "text-red-600"}`}>{s.isActive ? "Active" : "Inactive"}</span>
@@ -328,7 +368,7 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-text-muted">Status</span>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => handleToggle(s)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${s.isActive ? "bg-emerald-500" : "bg-slate-300"}`}>
+                        <button onClick={() => handleToggle(s)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${s.isActive ? "bg-emerald-500" : "bg-red-500"}`}>
                           <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${s.isActive ? "translate-x-[18px]" : "translate-x-0.5"}`} />
                         </button>
                         <span className={`text-xs font-semibold ${s.isActive ? "text-emerald-700" : "text-red-600"}`}>{s.isActive ? "Active" : "Inactive"}</span>
@@ -749,6 +789,6 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }

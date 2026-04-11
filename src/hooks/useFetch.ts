@@ -20,5 +20,5 @@ export function useFetch<T>(fetcher: () => Promise<T>) {
 
   useEffect(() => { load(); }, [load]);
 
-  return { data, loading, error, refetch: load };
+  return { data, setData, loading, error, refetch: load };
 }

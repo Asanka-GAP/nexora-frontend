@@ -5,10 +5,10 @@ import {
   BookOpen, GraduationCap, Sparkles, Calendar,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import AppShell from "@/components/layout/AppShell";
 import { useFetch } from "@/hooks/useFetch";
 import { getSchedules } from "@/services/api";
 import type { Schedule } from "@/lib/types";
+import PageSkeleton from "@/components/ui/PageSkeleton";
 
 type View = "week" | "month";
 
@@ -53,8 +53,8 @@ const formatTime = (t: string) => {
 };
 
 const formatShortTime = (t: string) => {
-  const [h] = t.split(":").map(Number);
-  return `${h % 12 || 12}${h >= 12 ? "p" : "a"}`;
+  const [h, m] = t.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")}${h >= 12 ? "p" : "a"}`;
 };
 
 export default function CalendarPage() {
@@ -122,8 +122,10 @@ export default function CalendarPage() {
       })()
     : currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
+  if (loading && !schedules) return <PageSkeleton />;
+
   return (
-    <AppShell title="Calendar">
+    <>
       {/* ── Hero Header ── */}
       <div className="relative mb-6 rounded-2xl overflow-hidden bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 p-6 shadow-xl">
         <div className="absolute inset-0 opacity-10">
@@ -142,27 +144,29 @@ export default function CalendarPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             <button onClick={() => setCurrentDate(new Date())}
               className="px-4 py-2 text-sm font-semibold text-white bg-white/15 backdrop-blur-sm rounded-xl border border-white/20 hover:bg-white/25 transition-all">
               Today
             </button>
-            <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden">
-              <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/10 transition">
-                <ChevronLeft className="w-5 h-5 text-white" />
-              </button>
-              <div className="w-px h-6 bg-white/20" />
-              <button onClick={() => navigate(1)} className="p-2 hover:bg-white/10 transition">
-                <ChevronRight className="w-5 h-5 text-white" />
-              </button>
-            </div>
-            <div className="flex bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden">
-              {(["week", "month"] as View[]).map((v) => (
-                <button key={v} onClick={() => setView(v)}
-                  className={`px-4 py-2 text-sm font-semibold capitalize transition-all ${view === v ? "bg-white text-indigo-700 shadow-lg" : "text-white/80 hover:bg-white/10"}`}>
-                  {v}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden">
+                <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/10 transition">
+                  <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
-              ))}
+                <div className="w-px h-6 bg-white/20" />
+                <button onClick={() => navigate(1)} className="p-2 hover:bg-white/10 transition">
+                  <ChevronRight className="w-5 h-5 text-white" />
+                </button>
+              </div>
+              <div className="flex flex-1 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden">
+                {(["week", "month"] as View[]).map((v) => (
+                  <button key={v} onClick={() => setView(v)}
+                    className={`flex-1 px-4 py-2 text-sm font-semibold capitalize transition-all ${view === v ? "bg-white text-indigo-700 shadow-lg" : "text-white/80 hover:bg-white/10"}`}>
+                    {v}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -296,11 +300,11 @@ export default function CalendarPage() {
                 const isPast = dateStr < todayStr;
                 const dayEvents = eventsByDate[dateStr] ?? [];
                 return (
-                  <div key={dateStr} className={`border-r border-border/40 last:border-r-0 p-2 flex flex-col gap-2 h-[420px] ${
+                  <div key={dateStr} className={`border-r border-border/40 last:border-r-0 p-2 flex flex-col gap-2 ${
                     isToday ? "bg-indigo-50/30" : isPast ? "bg-gray-50/30" : ""
                   }`}>
                     {dayEvents.length === 0 ? (
-                      <div className="flex-1 flex flex-col items-center justify-center opacity-25">
+                      <div className="flex-1 flex flex-col items-center justify-center opacity-25 py-8">
                         <Calendar className="w-6 h-6 text-text-muted mb-1.5" />
                         <p className="text-[10px] text-text-muted font-medium">No classes</p>
                       </div>
@@ -528,7 +532,7 @@ export default function CalendarPage() {
                         )}
                       </div>
                       <div className="space-y-1">
-                        {dayEvents.slice(0, 3).map((ev) => {
+                        {dayEvents.map((ev) => {
                           const s = STATUS_STYLES[ev.status] ?? STATUS_STYLES.UPCOMING;
                           return (
                             <button
@@ -536,16 +540,10 @@ export default function CalendarPage() {
                               onClick={() => setSelectedEvent(ev)}
                               className={`w-full text-left rounded-lg px-2 py-1 text-[10px] font-semibold truncate border transition-all hover:shadow-sm hover:-translate-y-px ${s.card}`}
                             >
-                              <span className="opacity-60">{formatShortTime(ev.startTime)}–{formatShortTime(ev.endTime)}</span>{" "}
-                              {ev.className}
+                              <span className="opacity-60">{formatShortTime(ev.startTime)}–{formatShortTime(ev.endTime)}</span><span className="opacity-30 mx-0.5">|</span>{ev.className}
                             </button>
                           );
                         })}
-                        {dayEvents.length > 3 && (
-                          <p className="text-[10px] text-indigo-500 font-bold pl-2 cursor-pointer hover:text-indigo-700">
-                            +{dayEvents.length - 3} more
-                          </p>
-                        )}
                       </div>
                     </div>
                   );
@@ -657,6 +655,6 @@ export default function CalendarPage() {
           );
         })()}
       </AnimatePresence>
-    </AppShell>
+    </>
   );
 }

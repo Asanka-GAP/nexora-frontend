@@ -3,10 +3,10 @@ import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { Calendar, XCircle, RotateCcw, CheckCircle, Clock, BarChart3, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import AppShell from "@/components/layout/AppShell";
 import { useFetch } from "@/hooks/useFetch";
 import { getSchedules, cancelSchedule, reactivateSchedule } from "@/services/api";
 import type { Schedule } from "@/lib/types";
+import PageSkeleton from "@/components/ui/PageSkeleton";
 
 type StatusFilter = "ALL" | "UPCOMING" | "COMPLETED" | "CANCELLED";
 const STATUSES: { id: StatusFilter; label: string }[] = [
@@ -105,14 +105,16 @@ export default function SchedulePage() {
     .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
     .reduce<(number | string)[]>((acc, p, idx, arr) => { if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []);
 
+  if (loading && !sessions) return <PageSkeleton />;
+
   return (
-    <AppShell title="Schedule">
+    <>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div><h2 className="text-lg font-semibold text-text">Class Schedule</h2><p className="text-xs text-text-muted mt-0.5">{counts.UPCOMING} upcoming · {counts.COMPLETED} completed · {counts.CANCELLED} cancelled</p></div>
       </div>
 
       {/* Stat Cards */}
-      {!loading && (
+      {monthSessions && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {[
             { label: "TOTAL SESSIONS", value: monthCounts.ALL, sub: currentMonthName, gradient: "from-[#4F46E5] to-[#3730A3]", accentColor: "#4F46E5", icon: <BarChart3 className="w-5 h-5" />, trend: null, up: null },
@@ -175,12 +177,12 @@ export default function SchedulePage() {
               {dateOpen && (<>
                 <div className="fixed inset-0 z-30" onClick={() => setDateOpen(false)} />
                 <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-2 z-40 bg-bg-card rounded-2xl border border-border shadow-xl w-[400px] overflow-hidden">
+                  className="fixed inset-x-4 top-1/2 -translate-y-1/2 sm:absolute sm:inset-x-auto sm:top-full sm:right-0 sm:translate-y-0 sm:mt-2 z-40 bg-bg-card rounded-2xl border border-border shadow-xl sm:w-[400px] overflow-hidden">
                   <div className="p-4 border-b border-border">
                     <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-3 px-1">Quick Select</p>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {PRESETS.map(p => (<button key={p.label} onClick={() => { setDateFrom(p.from()); setDateTo(p.to()); }}
-                        className={`px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${activePreset === p.label ? "text-white shadow-sm bg-primary" : "bg-bg text-text-muted hover:bg-border/50"}`}>{p.label}</button>))}
+                        className={`px-3 py-2.5 rounded-[10px] text-sm font-semibold transition-all ${activePreset === p.label ? "text-white shadow-sm" : "bg-bg text-text-muted hover:text-slate-700"}`} style={activePreset === p.label ? { background: "linear-gradient(135deg, #4F46E5, #3730A3)" } : {}}>{p.label}</button>))}
                     </div>
                   </div>
                   <div className="p-4 space-y-3">
@@ -203,8 +205,11 @@ export default function SchedulePage() {
           </div>
         </div>
         {/* Status tabs */}
-        <div className="flex flex-wrap gap-1.5">
-          {STATUSES.map(s => (<button key={s.id} onClick={() => setStatusFilter(s.id)} className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${statusFilter === s.id ? "text-white shadow-md bg-primary" : "bg-bg text-text-muted hover:bg-border/50"}`}>{s.label} ({counts[s.id]})</button>))}
+        <div className="flex items-center bg-slate-100/80 rounded-xl p-0.5">
+          {STATUSES.map(s => {
+            const colors: Record<string, string> = { ALL: "linear-gradient(135deg, #4F46E5, #3730A3)", UPCOMING: "linear-gradient(135deg, #8B5CF6, #7C3AED)", COMPLETED: "linear-gradient(135deg, #10B981, #059669)", CANCELLED: "linear-gradient(135deg, #EF4444, #DC2626)" };
+            return (<button key={s.id} onClick={() => setStatusFilter(s.id)} className={`flex-1 px-2 sm:px-3.5 py-1.5 rounded-[10px] text-[10px] sm:text-xs font-semibold transition-all truncate ${statusFilter === s.id ? "text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`} style={statusFilter === s.id ? { background: colors[s.id] } : {}}><span className="hidden sm:inline">{s.label} ({counts[s.id]})</span><span className="sm:hidden">{s.id === "ALL" ? "All" : s.label.slice(0, 4)} {counts[s.id]}</span></button>);
+          })}
         </div>
       </div>
 
@@ -248,13 +253,12 @@ export default function SchedulePage() {
                   <div className={`w-1 rounded-full flex-shrink-0 ${accentColor(s.status)}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <div><p className="font-semibold text-text text-sm truncate">{s.className}</p><p className="text-[10px] text-text-muted">{new Date(s.sessionDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p></div>
+                      <div><p className="font-semibold text-text text-sm truncate">{s.className}</p><p className="text-[10px] text-text-muted">{new Date(s.sessionDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>{s.location && <p className="text-[10px] text-text-muted truncate">{s.location}</p>}</div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${statusBadge(s.status)}`}>{s.status}</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 mb-2">
+                    <div className="grid grid-cols-2 gap-2 mb-2">
                       <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Grade</p><p className="text-xs font-medium text-text mt-0.5">{s.grade}</p></div>
                       <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Time</p><p className="text-xs font-medium text-text mt-0.5">{s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}</p></div>
-                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Location</p><p className="text-xs font-medium text-text mt-0.5 truncate">{s.location || "—"}</p></div>
                     </div>
                     {s.status === "UPCOMING" && (<button onClick={() => setCancelTarget(s)} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-danger bg-danger/10 hover:bg-danger/20 transition-all"><XCircle className="w-3.5 h-3.5" />Cancel</button>)}
                     {canReactivate(s) && (<button onClick={() => setReactivateTarget(s)} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-success bg-success/10 hover:bg-success/20 transition-all"><RotateCcw className="w-3.5 h-3.5" />Reactivate</button>)}
@@ -311,6 +315,6 @@ export default function SchedulePage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }

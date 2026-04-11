@@ -2,11 +2,11 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import AppShell from "@/components/layout/AppShell";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/lib/auth";
 import { useFetch } from "@/hooks/useFetch";
 import { getTeacherProfile, updateTeacherProfile, changeTeacherPassword, sendEmailOtp, changeTeacherEmail } from "@/services/api";
+import PageSkeleton from "@/components/ui/PageSkeleton";
 
 type Tab = "profile" | "password";
 
@@ -171,8 +171,10 @@ export default function SettingsPage() {
     { key: "password", label: "Password", icon: <Lock className="w-4 h-4" /> },
   ];
 
+  if (loading && !profile) return <PageSkeleton />;
+
   return (
-    <AppShell title="Settings">
+    <>
       <div className="max-w-2xl mx-auto space-y-6">
         <div>
           <h2 className="text-lg font-semibold text-text">Settings</h2>
@@ -376,6 +378,6 @@ export default function SettingsPage() {
           </motion.div>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

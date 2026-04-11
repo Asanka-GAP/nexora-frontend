@@ -20,6 +20,9 @@ export default function ScannerPage() {
   const html5QrRef = useRef<unknown>(null);
   const lastScanRef = useRef<{ code: string; time: number }>({ code: "", time: 0 });
 
+  const mountedRef = useRef(true);
+  const scannerBusyRef = useRef(false);
+
   const [scanning, setScanning] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -58,17 +61,60 @@ export default function ScannerPage() {
   }, []);
 
   const startScanner = useCallback(async () => {
-    if (!scannerRef.current) return; setCameraError(null);
-    try { const { Html5Qrcode } = await import("html5-qrcode"); const s = new Html5Qrcode("qr-reader"); html5QrRef.current = s; await s.start({ facingMode: "environment" }, { fps: 15, qrbox: (vw, vh) => ({ width: Math.min(vw, vh) * 0.7, height: Math.min(vw, vh) * 0.7 }) }, onScanSuccess, () => {}); setScanning(true); }
-    catch { setCameraError("Camera access denied. Please allow camera permissions."); }
+    if (!scannerRef.current || scannerBusyRef.current) return;
+    scannerBusyRef.current = true;
+    setCameraError(null);
+    // Stop any existing scanner first
+    try {
+      const existing = html5QrRef.current as { getState?: () => number; stop: () => Promise<void>; clear: () => void } | null;
+      if (existing) {
+        try { await existing.stop(); } catch {}
+        try { existing.clear(); } catch {}
+        html5QrRef.current = null;
+      }
+    } catch {}
+    // Clear the container
+    const el = document.getElementById("qr-reader");
+    if (el) el.innerHTML = "";
+    if (!mountedRef.current) { scannerBusyRef.current = false; return; }
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      if (!mountedRef.current) { scannerBusyRef.current = false; return; }
+      const s = new Html5Qrcode("qr-reader");
+      html5QrRef.current = s;
+      await s.start(
+        { facingMode: "environment" },
+        { fps: 15, qrbox: (vw: number, vh: number) => ({ width: Math.min(vw, vh) * 0.7, height: Math.min(vw, vh) * 0.7 }) },
+        onScanSuccess,
+        () => {}
+      );
+      if (mountedRef.current) setScanning(true);
+    } catch {
+      if (mountedRef.current) setCameraError("Camera access denied. Please allow camera permissions.");
+    } finally {
+      scannerBusyRef.current = false;
+    }
   }, [onScanSuccess]);
 
   const stopScanner = useCallback(async () => {
-    try { const s = html5QrRef.current as { stop: () => Promise<void>; clear: () => void } | null; if (s) { await s.stop(); s.clear(); } } catch {}
-    html5QrRef.current = null; setScanning(false);
+    try {
+      const s = html5QrRef.current as { getState?: () => number; stop: () => Promise<void>; clear: () => void } | null;
+      if (s) {
+        try { await s.stop(); } catch {}
+        try { s.clear(); } catch {}
+      }
+    } catch {}
+    html5QrRef.current = null;
+    setScanning(false);
   }, []);
 
-  useEffect(() => { return () => { stopScanner(); }; }, [stopScanner]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      stopScanner();
+    };
+  }, [stopScanner]);
 
   const successCount = recentScans.filter(s => s.success).length;
   const failCount = recentScans.filter(s => !s.success).length;

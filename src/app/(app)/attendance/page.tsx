@@ -3,14 +3,14 @@ import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ScanLine, CheckCircle, Calendar, Users, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import AppShell from "@/components/layout/AppShell";
 
 import Button from "@/components/ui/Button";
 import { useFetch } from "@/hooks/useFetch";
 import { getAttendance, getTodayAttendanceCount, getClasses } from "@/services/api";
 import type { AttendanceRecord, ClassItem } from "@/lib/types";
+import PageSkeleton from "@/components/ui/PageSkeleton";
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 10;
 const toStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const monday = (d: Date) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); return r; };
 const sunday = (m: Date) => { const r = new Date(m); r.setDate(r.getDate() + 6); return r; };
@@ -69,8 +69,10 @@ export default function AttendancePage() {
     .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
     .reduce<(number | string)[]>((acc, p, idx, arr) => { if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []);
 
+  if (loading && !records) return <PageSkeleton />;
+
   return (
-    <AppShell title="Attendance">
+    <>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div><h2 className="text-lg font-semibold text-text">Attendance</h2><p className="text-xs text-text-muted mt-0.5">Scan QR codes to mark attendance automatically</p></div>
         <Button onClick={() => router.push("/scanner")}><ScanLine className="h-4 w-4" /> Open Scanner</Button>
@@ -169,7 +171,7 @@ export default function AttendancePage() {
                   <div className="p-4 border-b border-border">
                     <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-3 px-1">Quick Select</p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {PRESETS.map(p => (<button key={p.label} onClick={() => { setDateFrom(p.from()); setDateTo(p.to()); }} className={`px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${activePreset === p.label ? "text-white shadow-sm bg-primary" : "bg-bg text-text-muted hover:bg-border/50"}`}>{p.label}</button>))}
+                      {PRESETS.map(p => (<button key={p.label} onClick={() => { setDateFrom(p.from()); setDateTo(p.to()); }} className={`px-3 py-2.5 rounded-[10px] text-sm font-semibold transition-all ${activePreset === p.label ? "text-white shadow-sm" : "bg-bg text-text-muted hover:text-slate-700"}`} style={activePreset === p.label ? { background: "linear-gradient(135deg, #4F46E5, #3730A3)" } : {}}>{p.label}</button>))}
                     </div>
                   </div>
                   <div className="p-4 space-y-3">
@@ -254,6 +256,6 @@ export default function AttendancePage() {
           )}
         </div>
       )}
-    </AppShell>
+    </>
   );
 }

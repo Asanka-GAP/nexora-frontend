@@ -2,8 +2,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Clock, Users, MapPin, BookOpen, Layers, CalendarDays, GraduationCap } from "lucide-react";
-import { motion } from "framer-motion";
-import AppShell from "@/components/layout/AppShell";
+import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
 
 import Modal from "@/components/ui/Modal";
@@ -11,10 +10,11 @@ import { useFetch } from "@/hooks/useFetch";
 import { getClasses, createClass, updateClass, deleteClassApi, addScheduleToClass, deleteScheduleFromClass } from "@/services/api";
 import { DAYS } from "@/lib/utils";
 import type { ClassItem } from "@/lib/types";
+import PageSkeleton from "@/components/ui/PageSkeleton";
 
 interface ScheduleEntry { dayOfWeek: number; startTime: string; endTime: string; }
 const emptyForm = { name: "", grade: 1, location: "" };
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
 export default function ClassesPage() {
   const fetchClasses = useCallback(() => getClasses(), []);
@@ -31,7 +31,19 @@ export default function ClassesPage() {
   const [scheduleClass, setScheduleClass] = useState<ClassItem | null>(null);
   const [newSchedule, setNewSchedule] = useState<ScheduleEntry>({ dayOfWeek: 1, startTime: "08:00", endTime: "09:00" });
   const [addingSched, setAddingSched] = useState(false);
+  const [schedPage, setSchedPage] = useState(1);
+  const [schedDirection, setSchedDirection] = useState(0);
   const [page, setPage] = useState(1);
+
+  const SCHED_PAGE_SIZE = 3;
+  const schedList = scheduleClass?.schedules ?? [];
+  const schedTotalPages = Math.ceil(schedList.length / SCHED_PAGE_SIZE);
+  const schedPaginated = schedList.slice((schedPage - 1) * SCHED_PAGE_SIZE, schedPage * SCHED_PAGE_SIZE);
+
+  const goSchedPage = (p: number) => {
+    setSchedDirection(p > schedPage ? 1 : -1);
+    setSchedPage(p);
+  };
 
   const all = classes ?? [];
   const totalStudents = all.reduce((sum, c) => sum + (c.studentCount ?? 0), 0);
@@ -79,14 +91,14 @@ export default function ClassesPage() {
   const handleAddSchedule = async () => {
     if (!scheduleClass) return;
     setAddingSched(true);
-    try { await addScheduleToClass(scheduleClass.id, newSchedule); toast.success("Schedule added"); setNewSchedule({ dayOfWeek: 1, startTime: "08:00", endTime: "09:00" }); refetch(); setScheduleClass({ ...scheduleClass, ...(await getClasses()).find(c => c.id === scheduleClass.id) } as ClassItem); }
+    try { await addScheduleToClass(scheduleClass.id, newSchedule); toast.success("Schedule added"); setNewSchedule({ dayOfWeek: 1, startTime: "08:00", endTime: "09:00" }); refetch(); const updated = (await getClasses()).find(c => c.id === scheduleClass.id); if (updated) { setScheduleClass(updated as ClassItem); const lastPage = Math.ceil((updated.schedules?.length ?? 0) / SCHED_PAGE_SIZE); setSchedDirection(1); setSchedPage(lastPage); } }
     catch { toast.error("Failed to add schedule"); }
     finally { setAddingSched(false); }
   };
 
   const handleDeleteSchedule = async (scheduleId: string) => {
     if (!scheduleClass) return;
-    try { await deleteScheduleFromClass(scheduleClass.id, scheduleId); toast.success("Schedule removed"); refetch(); setScheduleClass({ ...scheduleClass, schedules: scheduleClass.schedules.filter(s => s.id !== scheduleId) }); }
+    try { await deleteScheduleFromClass(scheduleClass.id, scheduleId); toast.success("Schedule removed"); refetch(); const newScheds = scheduleClass.schedules.filter(s => s.id !== scheduleId); setScheduleClass({ ...scheduleClass, schedules: newScheds }); const newTotal = Math.ceil(newScheds.length / SCHED_PAGE_SIZE); if (schedPage > newTotal && newTotal > 0) { setSchedDirection(-1); setSchedPage(newTotal); } }
     catch { toast.error("Failed to remove schedule"); }
   };
 
@@ -144,8 +156,10 @@ export default function ClassesPage() {
     .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
     .reduce<(number | string)[]>((acc, p, idx, arr) => { if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []);
 
+  if (loading && !classes) return <PageSkeleton />;
+
   return (
-    <AppShell title="Classes">
+    <>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div><h2 className="text-lg font-semibold text-text">All Classes</h2><p className="text-xs text-text-muted mt-0.5">{all.length} classes total</p></div>
         <Button onClick={openCreate}><Plus className="h-4 w-4" /> New Class</Button>
@@ -186,7 +200,7 @@ export default function ClassesPage() {
           </div>
           {(search || filterGrade !== "ALL") && (<div className="flex items-center gap-2 flex-shrink-0"><span className="text-[11px] font-medium text-text-muted">{filtered.length} found</span><button onClick={() => { setSearch(""); setFilterGrade("ALL"); }} className="text-[11px] font-semibold text-primary hover:underline">Clear all</button></div>)}
         </div>
-        {grades.length > 1 && (<div className="flex flex-wrap gap-1.5 mt-3">{(["ALL" as const, ...grades]).map(g => (<button key={g} onClick={() => setFilterGrade(g)} className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${filterGrade === g ? "text-white shadow-md bg-primary" : "bg-bg text-text-muted hover:bg-border/50"}`}>{g === "ALL" ? "All Grades" : `Grade ${g}`}</button>))}</div>)}
+        {grades.length > 1 && (<div className="flex flex-wrap items-center gap-1 mt-3"><div className="flex items-center bg-slate-100/80 rounded-xl p-0.5">{(["ALL" as const, ...grades]).map(g => (<button key={g} onClick={() => setFilterGrade(g)} className={`px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all whitespace-nowrap ${filterGrade === g ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>{g === "ALL" ? "All" : `G${g}`}</button>))}</div></div>)}
       </div>
 
       {/* Table */}
@@ -402,12 +416,12 @@ export default function ClassesPage() {
                           </div>
                         </div>
                         {/* Time range */}
-                        <div className="flex items-center gap-3 justify-center">
+                        <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
                           <div className="text-center">
                             <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Start</label>
                             <TimePicker value={s.startTime} onChange={v => updateScheduleRow(idx, "startTime", v)} />
                           </div>
-                          <div className="pt-5">
+                          <div className="pt-5 hidden sm:block">
                             <div className="w-4 h-px bg-border" />
                           </div>
                           <div className="text-center">
@@ -432,7 +446,7 @@ export default function ClassesPage() {
       </Modal>
 
       {/* Schedule Management Modal */}
-      <Modal open={!!scheduleClass} onClose={() => setScheduleClass(null)} title="" className="max-w-lg p-0">
+      <Modal open={!!scheduleClass} onClose={() => { setScheduleClass(null); setSchedPage(1); setSchedDirection(0); }} title="" className="max-w-lg p-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-sky-600 to-cyan-700 px-6 py-5 rounded-t-2xl">
           <div className="flex items-center gap-3">
@@ -449,21 +463,61 @@ export default function ClassesPage() {
         <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
           {/* Existing schedules */}
           <div>
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-3">Current Schedule</p>
-            {scheduleClass?.schedules?.length ? (
-              <div className="space-y-2">
-                {scheduleClass.schedules.map((s, i) => (
-                  <div key={s.id} className="flex items-center gap-3 rounded-xl border border-border bg-bg/50 px-4 py-3 group hover:border-sky-200 transition-all">
-                    <div className="w-9 h-9 rounded-lg bg-sky-50 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-bold text-sky-600">{i + 1}</span>
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-3">Current Schedule {schedList.length > 0 && <span className="text-text-muted/50 normal-case tracking-normal">({schedList.length} slot{schedList.length !== 1 ? "s" : ""})</span>}</p>
+            {schedList.length ? (
+              <div>
+                <div className="relative overflow-hidden">
+                  <AnimatePresence mode="wait" initial={false} custom={schedDirection}>
+                    <motion.div
+                      key={schedPage}
+                      custom={schedDirection}
+                      variants={{
+                        enter: (dir: number) => ({ x: dir > 0 ? 80 : -80, opacity: 0 }),
+                        center: { x: 0, opacity: 1 },
+                        exit: (dir: number) => ({ x: dir > 0 ? -80 : 80, opacity: 0 }),
+                      }}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={{ type: "spring", stiffness: 400, damping: 35, mass: 0.8 }}
+                      className="space-y-2"
+                    >
+                      {schedPaginated.map((s, i) => (
+                        <motion.div
+                          key={s.id}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.06, duration: 0.2 }}
+                          className="flex items-center gap-3 rounded-xl border border-border bg-bg/50 px-4 py-3 group hover:border-sky-200 transition-all"
+                        >
+                          <div className="w-9 h-9 rounded-lg bg-sky-50 flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs font-bold text-sky-600">{(schedPage - 1) * SCHED_PAGE_SIZE + i + 1}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-text">{DAYS[s.dayOfWeek]}</p>
+                            <p className="text-xs text-text-muted">{s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}</p>
+                          </div>
+                          <button onClick={() => handleDeleteSchedule(s.id)} className="p-2 rounded-lg text-danger/40 hover:text-danger hover:bg-danger/10 transition-all"><Trash2 className="w-4 h-4" /></button>
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+                {schedTotalPages > 1 && (
+                  <div className="flex items-center justify-between pt-3">
+                    <p className="text-[10px] text-text-muted">{(schedPage - 1) * SCHED_PAGE_SIZE + 1}–{Math.min(schedPage * SCHED_PAGE_SIZE, schedList.length)} of {schedList.length}</p>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => goSchedPage(schedPage - 1)} disabled={schedPage === 1}
+                        className="px-2 py-1 text-xs rounded-lg text-text-muted hover:bg-border/50 disabled:opacity-30 transition">‹</button>
+                      {Array.from({ length: schedTotalPages }, (_, i) => i + 1).map(p => (
+                        <button key={p} onClick={() => goSchedPage(p)}
+                          className={`min-w-[24px] py-1 text-[11px] rounded-lg font-semibold transition ${schedPage === p ? "text-white bg-sky-500 shadow-sm" : "text-text-muted hover:bg-border/50"}`}>{p}</button>
+                      ))}
+                      <button onClick={() => goSchedPage(schedPage + 1)} disabled={schedPage === schedTotalPages}
+                        className="px-2 py-1 text-xs rounded-lg text-text-muted hover:bg-border/50 disabled:opacity-30 transition">›</button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-text">{DAYS[s.dayOfWeek]}</p>
-                      <p className="text-xs text-text-muted">{s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}</p>
-                    </div>
-                    <button onClick={() => handleDeleteSchedule(s.id)} className="p-2 rounded-lg text-danger/40 hover:text-danger hover:bg-danger/10 transition-all"><Trash2 className="w-4 h-4" /></button>
                   </div>
-                ))}
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-8 rounded-xl border border-dashed border-border">
@@ -494,12 +548,12 @@ export default function ClassesPage() {
                   ))}
                 </div>
               </div>
-              <div className="flex items-center gap-3 justify-center">
+              <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
                 <div className="text-center">
                   <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Start</label>
                   <TimePicker value={newSchedule.startTime} onChange={v => setNewSchedule({ ...newSchedule, startTime: v })} />
                 </div>
-                <div className="pt-5">
+                <div className="pt-5 hidden sm:block">
                   <div className="w-4 h-px bg-border" />
                 </div>
                 <div className="text-center">
@@ -513,7 +567,7 @@ export default function ClassesPage() {
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-bg/40">
-          <Button variant="ghost" onClick={() => setScheduleClass(null)}>Close</Button>
+          <Button variant="ghost" onClick={() => { setScheduleClass(null); setSchedPage(1); setSchedDirection(0); }}>Close</Button>
           <Button onClick={handleAddSchedule} loading={addingSched}><Plus className="h-4 w-4" /> Add Slot</Button>
         </div>
       </Modal>
@@ -533,6 +587,6 @@ export default function ClassesPage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }
