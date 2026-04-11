@@ -79,19 +79,33 @@ export default function AttendancePage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
-          { label: "TODAY", value: todayCount ?? 0, sub: "Scans today", gradient: "from-emerald-600 to-teal-600", icon: <CheckCircle className="w-5 h-5" /> },
-          { label: "RECORDS", value: all.length, sub: activePreset || "Selected range", gradient: "from-blue-600 to-indigo-600", icon: <Calendar className="w-5 h-5" /> },
-          { label: "STUDENTS", value: uniqueStudents, sub: "Unique students", gradient: "from-violet-600 to-purple-600", icon: <Users className="w-5 h-5" /> },
-          { label: "CLASSES", value: uniqueClasses, sub: "Classes with attendance", gradient: "from-amber-500 to-orange-500", icon: <Clock className="w-5 h-5" /> },
+          { label: "TODAY", value: todayCount ?? 0, sub: "Scans today", gradient: "from-[#4F46E5] to-[#3730A3]", accentColor: "#4F46E5", icon: <CheckCircle className="w-5 h-5" />, trend: "+12%", up: true },
+          { label: "RECORDS", value: all.length, sub: activePreset || "Selected range", gradient: "from-emerald-500 to-emerald-600", accentColor: "#10b981", icon: <Calendar className="w-5 h-5" />, trend: null, up: null },
+          { label: "STUDENTS", value: uniqueStudents, sub: "Unique students", gradient: "from-violet-500 to-purple-600", accentColor: "#8b5cf6", icon: <Users className="w-5 h-5" />, trend: null, up: null },
+          { label: "CLASSES", value: uniqueClasses, sub: "Classes with attendance", gradient: "from-amber-500 to-orange-500", accentColor: "#f59e0b", icon: <Clock className="w-5 h-5" />, trend: null, up: null },
         ].map((card, i) => (
           <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-            className={`bg-gradient-to-br ${card.gradient} rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow duration-200 hover:-translate-y-0.5`}>
-            <div className="flex items-start justify-between mb-4">
-              <p className="text-xs font-bold text-white/70 uppercase tracking-widest">{card.label}</p>
-              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-white">{card.icon}</div>
+            className="relative bg-white rounded-2xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] transition-all duration-200 overflow-hidden group">
+            <svg className="absolute bottom-0 right-0 w-28 h-16 opacity-[0.06] group-hover:opacity-[0.10] transition-opacity" viewBox="0 0 120 60" fill="none">
+              <path d="M0 55 Q20 45 30 35 T60 20 T90 30 T120 10" stroke={card.accentColor} strokeWidth="3" fill="none" />
+              <path d="M0 55 Q20 45 30 35 T60 20 T90 30 T120 10 V60 H0 Z" fill={card.accentColor} opacity="0.3" />
+            </svg>
+            <div className="relative">
+              <div className="flex items-start justify-between mb-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</p>
+                <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-white shadow-md`}>{card.icon}</div>
+              </div>
+              <p className="text-2xl font-bold text-slate-800 leading-tight">{card.value}</p>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-[11px] text-slate-400">{card.sub}</p>
+                {card.trend && (
+                  <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md ${card.up ? "bg-emerald-50" : "bg-slate-50"}`}>
+                    {card.up && <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-emerald-500"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" /></svg>}
+                    <span className={`text-[10px] font-semibold ${card.up ? "text-emerald-600" : "text-slate-400"}`}>{card.trend}</span>
+                  </div>
+                )}
+              </div>
             </div>
-            <p className="text-3xl font-bold text-white leading-tight">{card.value}</p>
-            <p className="text-xs text-white/60 mt-1">{card.sub}</p>
           </motion.div>
         ))}
       </div>

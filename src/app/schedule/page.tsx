@@ -113,47 +113,46 @@ export default function SchedulePage() {
 
       {/* Stat Cards */}
       {!loading && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Total Sessions</p>
-                <p className="text-3xl font-bold text-text mt-1">{monthCounts.ALL}</p>
-                <p className="text-xs text-text-muted mt-1">{currentMonthName}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {[
+            { label: "TOTAL SESSIONS", value: monthCounts.ALL, sub: currentMonthName, gradient: "from-[#4F46E5] to-[#3730A3]", accentColor: "#4F46E5", icon: <BarChart3 className="w-5 h-5" />, trend: null, up: null },
+            { label: "COMPLETED", value: monthCounts.COMPLETED, sub: `${monthCounts.ALL > 0 ? Math.round((monthCounts.COMPLETED / monthCounts.ALL) * 100) : 0}% of total`, gradient: "from-emerald-500 to-emerald-600", accentColor: "#10b981", icon: <CheckCircle className="w-5 h-5" />, trend: monthCounts.COMPLETED > 0 ? `${monthCounts.COMPLETED} done` : null, up: monthCounts.COMPLETED > 0 ? true : null },
+            { label: "UPCOMING", value: monthCounts.UPCOMING, sub: monthCounts.UPCOMING === 1 ? "1 class remaining" : `${monthCounts.UPCOMING} classes remaining`, gradient: "from-violet-500 to-purple-600", accentColor: "#8b5cf6", icon: <Clock className="w-5 h-5" />, trend: monthCounts.UPCOMING > 0 ? `${monthCounts.UPCOMING} left` : null, up: monthCounts.UPCOMING > 0 ? true : null },
+            { label: "CANCELLED", value: monthCounts.CANCELLED, sub: monthCounts.CANCELLED > 0 ? `${Math.round((monthCounts.CANCELLED / monthCounts.ALL) * 100)}% cancellation rate` : "No cancellations", gradient: "from-red-500 to-red-600", accentColor: "#ef4444", icon: <AlertTriangle className="w-5 h-5" />, trend: monthCounts.CANCELLED > 0 ? `${monthCounts.CANCELLED} cancelled` : "Clean", up: monthCounts.CANCELLED > 0 ? false : true },
+          ].map((card, i) => (
+            <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+              className="relative bg-white rounded-2xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] transition-all duration-200 overflow-hidden group">
+              <svg className="absolute bottom-0 right-0 w-28 h-16 opacity-[0.06] group-hover:opacity-[0.10] transition-opacity" viewBox="0 0 120 60" fill="none">
+                <path d="M0 55 Q20 45 30 35 T60 20 T90 30 T120 10" stroke={card.accentColor} strokeWidth="3" fill="none" />
+                <path d="M0 55 Q20 45 30 35 T60 20 T90 30 T120 10 V60 H0 Z" fill={card.accentColor} opacity="0.3" />
+              </svg>
+              <div className="relative">
+                <div className="flex items-start justify-between mb-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</p>
+                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-white shadow-md`}>{card.icon}</div>
+                </div>
+                <p className="text-2xl font-bold text-slate-800 leading-tight">{card.value}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-[11px] text-slate-400">{card.sub}</p>
+                  {card.trend && (
+                    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md ${card.up === true ? "bg-emerald-50" : card.up === false ? "bg-red-50" : "bg-slate-50"}`}>
+                      {card.up === true && (
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-emerald-500">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+                        </svg>
+                      )}
+                      {card.up === false && (
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-red-500">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6L9 12.75l4.286-4.286a11.948 11.948 0 014.306 6.43l.776 2.898m0 0l3.182-5.511m-3.182 5.51l-5.511-3.181" />
+                        </svg>
+                      )}
+                      <span className={`text-[10px] font-semibold ${card.up === true ? "text-emerald-600" : card.up === false ? "text-red-500" : "text-slate-400"}`}>{card.trend}</span>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shadow-md"><BarChart3 className="w-5 h-5" /></div>
-            </div>
-          </div>
-          <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Completed</p>
-                <p className="text-3xl font-bold text-text mt-1">{monthCounts.COMPLETED}</p>
-                <p className="text-xs text-emerald-700 font-medium mt-1">{monthCounts.ALL > 0 ? Math.round((monthCounts.COMPLETED / monthCounts.ALL) * 100) : 0}% of total</p>
-              </div>
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white shadow-md"><CheckCircle className="w-5 h-5" /></div>
-            </div>
-          </div>
-          <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Upcoming</p>
-                <p className="text-3xl font-bold text-text mt-1">{monthCounts.UPCOMING}</p>
-                <p className="text-xs text-indigo-700 font-medium mt-1">{monthCounts.UPCOMING === 1 ? "1 class remaining" : `${monthCounts.UPCOMING} classes remaining`}</p>
-              </div>
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-700 flex items-center justify-center text-white shadow-md"><Clock className="w-5 h-5" /></div>
-            </div>
-          </div>
-          <div className="bg-bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Cancelled</p>
-                <p className="text-3xl font-bold text-text mt-1">{monthCounts.CANCELLED}</p>
-                <p className={`text-xs font-medium mt-1 ${monthCounts.CANCELLED > 0 ? "text-red-700" : "text-emerald-700"}`}>{monthCounts.CANCELLED > 0 ? `${Math.round((monthCounts.CANCELLED / monthCounts.ALL) * 100)}% cancellation rate` : "No cancellations"}</p>
-              </div>
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white shadow-md"><AlertTriangle className="w-5 h-5" /></div>
-            </div>
-          </div>
+            </motion.div>
+          ))}
         </div>
       )}
 

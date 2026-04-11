@@ -15,15 +15,15 @@ const ShieldIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" vi
 const Spinner = () => (<svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>);
 
 const PrimaryBtn = ({ loading, disabled, label, loadingLabel }: { loading: boolean; disabled?: boolean; label: string; loadingLabel: string }) => (
-  <button type="submit" disabled={loading || disabled} className="w-full h-12 rounded-xl font-semibold text-sm text-white transition-all duration-200 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer" style={{ background: "linear-gradient(135deg, #4F46E5, #3730A3)", boxShadow: "0 4px 14px rgba(79,70,229,0.3)" }}>
+  <button type="submit" disabled={loading || disabled} className="w-full h-13 lg:h-12 rounded-xl font-semibold text-base lg:text-sm text-white transition-all duration-200 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer" style={{ background: "linear-gradient(135deg, #4F46E5, #3730A3)", boxShadow: "0 4px 14px rgba(79,70,229,0.3)" }}>
     {loading ? <span className="flex items-center justify-center gap-2"><Spinner />{loadingLabel}</span> : label}
   </button>
 );
 
 const InputField = ({ icon, ...props }: { icon: React.ReactNode } & React.InputHTMLAttributes<HTMLInputElement>) => (
-  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 hover:border-slate-300 transition-all duration-200 bg-white focus-within:border-indigo-400 focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.08)]">
+  <div className="flex items-center gap-3 px-4 py-3.5 lg:py-3 rounded-xl border border-slate-200 hover:border-slate-300 transition-all duration-200 bg-white focus-within:border-indigo-400 focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.08)]">
     {icon}
-    <input {...props} className="flex-1 min-w-0 bg-transparent text-slate-800 text-sm placeholder:text-slate-300 outline-none" />
+    <input {...props} className="flex-1 min-w-0 bg-transparent text-slate-800 text-base lg:text-sm placeholder:text-slate-300 outline-none" />
   </div>
 );
 
@@ -146,17 +146,45 @@ export default function LoginPage() {
         <div className="relative z-10 flex gap-8">{[{ value: "<1s", label: "QR Scan Time" }, { value: "100%", label: "Accuracy" }, { value: "Live", label: "Notifications" }].map((s) => (<div key={s.label}><p className="text-white font-bold text-2xl">{s.value}</p><p className="text-white/50 text-sm">{s.label}</p></div>))}</div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center px-6 overflow-y-auto">
-        <div className="lg:hidden absolute top-6 left-6 flex items-center gap-2.5"><div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md" style={{ background: "linear-gradient(135deg, #4F46E5, #3730A3)" }}><span className="text-white font-black text-sm">N</span></div><span className="font-bold text-slate-800">Nexora</span></div>
-        <div className="w-full max-w-md">
+      {/* Mobile: gradient header + card form */}
+      <div className="flex-1 flex flex-col lg:items-center lg:justify-center overflow-y-auto">
+        {/* Mobile hero header */}
+        <div className="lg:hidden relative overflow-hidden px-6 pt-12 pb-10 flex-shrink-0" style={{ background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)" }}>
+          <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-white/10" />
+          <div className="absolute -bottom-20 -right-20 w-56 h-56 rounded-full bg-white/5" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-2.5 mb-6">
+              <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                <span className="text-white font-black text-sm">N</span>
+              </div>
+              <span className="text-white font-bold text-lg">Nexora</span>
+            </div>
+            <h1 className="text-white text-2xl font-bold leading-tight">Smart Attendance<br />for Modern Classrooms</h1>
+            <p className="text-white/60 text-sm mt-2">QR-based tracking & instant notifications</p>
+            <div className="flex gap-6 mt-5">
+              {[{ value: "<1s", label: "Scan" }, { value: "100%", label: "Accuracy" }, { value: "Live", label: "Alerts" }].map((s) => (
+                <div key={s.label}>
+                  <p className="text-white font-bold text-lg">{s.value}</p>
+                  <p className="text-white/40 text-[10px] font-medium uppercase tracking-wider">{s.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Form area */}
+        <div className="flex-1 flex items-start lg:items-center justify-center px-5 sm:px-6 pt-5 pb-8 lg:py-0">
+          <div className="w-full max-w-md lg:max-w-lg">
+            {/* Mobile card wrapper */}
+            <div className="lg:bg-transparent lg:shadow-none lg:border-0 lg:p-0 lg:rounded-none bg-white rounded-2xl shadow-lg border border-slate-100/80 p-6 sm:p-8">
           <AnimatePresence mode="wait">
             {step === "login" && (
               <motion.div key="login" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.3 }}>
-                <div className="mb-8"><h1 className="text-2xl font-bold text-slate-800">Welcome back</h1><p className="text-slate-400 text-sm mt-1">Sign in to your Nexora account</p></div>
+                <div className="mb-8"><h1 className="text-2xl lg:text-2xl font-bold text-slate-800">Welcome back</h1><p className="text-slate-400 text-base lg:text-sm mt-1">Sign in to your Nexora account</p></div>
                 <form onSubmit={handleLogin} className="flex flex-col gap-5">
                   <ErrorBox msg={error} />
-                  <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-slate-600">Username or Email</label><InputField icon={<UserIcon />} placeholder="Enter username or email" value={form.username} onChange={(e) => { setForm(p => ({ ...p, username: e.target.value })); clearError(); }} required /></div>
-                  <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-slate-600">Password</label><InputField icon={<LockIcon />} type="password" placeholder="Enter your password" value={form.password} onChange={(e) => { setForm(p => ({ ...p, password: e.target.value })); clearError(); }} required /></div>
+                  <div className="flex flex-col gap-1.5"><label className="text-base lg:text-sm font-medium text-slate-600">Username or Email</label><InputField icon={<UserIcon />} placeholder="Enter username or email" value={form.username} onChange={(e) => { setForm(p => ({ ...p, username: e.target.value })); clearError(); }} required /></div>
+                  <div className="flex flex-col gap-1.5"><label className="text-base lg:text-sm font-medium text-slate-600">Password</label><InputField icon={<LockIcon />} type="password" placeholder="Enter your password" value={form.password} onChange={(e) => { setForm(p => ({ ...p, password: e.target.value })); clearError(); }} required /></div>
                   <PrimaryBtn loading={loading} label="Sign In" loadingLabel="Signing in..." />
                   <button type="button" onClick={() => { setStep("forgotEmail"); clearError(); }} className="text-sm text-indigo-600 hover:text-indigo-700 font-medium text-center transition-colors cursor-pointer">Forgot password?</button>
                 </form>
@@ -165,10 +193,10 @@ export default function LoginPage() {
 
             {step === "forgotEmail" && (
               <motion.div key="forgotEmail" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.3 }}>
-                <div className="mb-8"><h1 className="text-2xl font-bold text-slate-800">Forgot password?</h1><p className="text-slate-400 text-sm mt-1">Enter your email and we&apos;ll send you a verification code.</p></div>
+                <div className="mb-8"><h1 className="text-2xl lg:text-2xl font-bold text-slate-800">Forgot password?</h1><p className="text-slate-400 text-base lg:text-sm mt-1">Enter your email and we&apos;ll send you a verification code.</p></div>
                 <form onSubmit={handleForgotSend} className="flex flex-col gap-5">
                   <ErrorBox msg={error} />
-                  <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-slate-600">Email Address</label><InputField icon={<MailIcon />} type="email" placeholder="your-email@example.com" value={forgotEmail} onChange={(e) => { setForgotEmail(e.target.value); clearError(); }} required /></div>
+                  <div className="flex flex-col gap-1.5"><label className="text-base lg:text-sm font-medium text-slate-600">Email Address</label><InputField icon={<MailIcon />} type="email" placeholder="your-email@example.com" value={forgotEmail} onChange={(e) => { setForgotEmail(e.target.value); clearError(); }} required /></div>
                   <PrimaryBtn loading={loading} label="Send OTP" loadingLabel="Sending..." />
                   <button type="button" onClick={() => { setStep("login"); clearError(); }} className="text-sm text-slate-500 hover:text-slate-700 font-medium text-center transition-colors cursor-pointer">← Back to login</button>
                 </form>
@@ -179,8 +207,8 @@ export default function LoginPage() {
               <motion.div key="otp" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.3 }}>
                 <div className="mb-6">
                   <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg mb-3"><ShieldIcon /></div>
-                  <h1 className="text-2xl font-bold text-slate-800">{flow === "firstLogin" ? "Verify your identity" : "Enter verification code"}</h1>
-                  <p className="text-slate-400 text-sm mt-0.5">We sent a 6-digit code to <span className="font-medium text-slate-600">{maskedEmail}</span></p>
+                  <h1 className="text-2xl lg:text-2xl font-bold text-slate-800">{flow === "firstLogin" ? "Verify your identity" : "Enter verification code"}</h1>
+                  <p className="text-slate-400 text-base lg:text-sm mt-0.5">We sent a 6-digit code to <span className="font-medium text-slate-600">{maskedEmail}</span></p>
                 </div>
                 <form onSubmit={handleVerifyOtp} className="flex flex-col gap-5">
                   <ErrorBox msg={error} />
@@ -198,8 +226,8 @@ export default function LoginPage() {
               <motion.div key="newPw" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.3 }}>
                 <div className="mb-5">
                   <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg mb-3"><LockIcon /></div>
-                  <h1 className="text-2xl font-bold text-slate-800">{flow === "firstLogin" ? "Set your password" : "Create new password"}</h1>
-                  <p className="text-slate-400 text-sm mt-0.5">{flow === "firstLogin" ? "Create a strong password for your account." : "Your identity has been verified. Set your new password."}</p>
+                  <h1 className="text-2xl lg:text-2xl font-bold text-slate-800">{flow === "firstLogin" ? "Set your password" : "Create new password"}</h1>
+                  <p className="text-slate-400 text-base lg:text-sm mt-0.5">{flow === "firstLogin" ? "Create a strong password for your account." : "Your identity has been verified. Set your new password."}</p>
                 </div>
                 <form onSubmit={handleSetPassword} className="flex flex-col gap-4">
                   <ErrorBox msg={error} />
@@ -209,6 +237,8 @@ export default function LoginPage() {
               </motion.div>
             )}
           </AnimatePresence>
+            </div>
+          </div>
         </div>
       </div>
     </main>

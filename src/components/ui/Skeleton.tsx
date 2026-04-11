@@ -17,21 +17,22 @@ export default function Skeleton({ className, count = 1 }: SkeletonProps) {
 
 export function CardSkeleton() {
   return (
-    <div className="rounded-2xl bg-bg-card border border-border p-6 space-y-3">
-      <div className="skeleton h-4 w-1/3" />
-      <div className="skeleton h-8 w-1/2" />
-      <div className="skeleton h-3 w-2/3" />
+    <div className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 p-5 animate-pulse">
+      <div className="h-3 bg-slate-200 rounded w-24 mb-3" />
+      <div className="h-7 bg-slate-200 rounded w-32 mb-2" />
+      <div className="h-3 bg-slate-200 rounded w-20" />
     </div>
   );
 }
 
 export function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <div className="space-y-3">
-      <div className="skeleton h-10 w-full rounded-xl" />
-      {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="skeleton h-14 w-full rounded-xl" />
-      ))}
+    <div className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 p-8">
+      <div className="animate-pulse space-y-4">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="h-10 bg-slate-100 rounded-lg" />
+        ))}
+      </div>
     </div>
   );
 }

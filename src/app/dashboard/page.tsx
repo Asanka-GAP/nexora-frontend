@@ -56,25 +56,25 @@ function DatePicker({ value, onChange, label }: { value: string; onChange: (v: s
   return (
     <div ref={ref} className="relative">
       <button type="button" onClick={() => setOpen(!open)}
-        className={`flex items-center gap-2 pl-3 pr-3.5 py-1.5 rounded-xl border bg-bg transition-all cursor-pointer ${
-          open ? "border-blue-400 ring-2 ring-blue-100" : "border-border hover:border-blue-300 hover:bg-blue-50/30"
+        className={`flex items-center gap-2 pl-3 pr-3.5 py-1.5 rounded-xl border bg-white transition-all cursor-pointer ${
+          open ? "border-indigo-400 ring-2 ring-indigo-100" : "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
         }`}>
-        <CalendarIcon className="w-3.5 h-3.5 text-blue-600" />
-        <span className="text-xs font-semibold text-text">{current.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+        <CalendarIcon className="w-3.5 h-3.5 text-[#4F46E5]" />
+        <span className="text-xs font-semibold text-slate-800">{current.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
       </button>
       {open && (
         <>
         <div className="fixed inset-0 z-40 bg-black/20 sm:hidden" onClick={() => setOpen(false)} />
         <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.15 }}
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:absolute sm:top-full sm:left-auto sm:right-0 sm:translate-x-0 sm:translate-y-0 sm:mt-2 z-50 bg-bg-card rounded-2xl border border-border shadow-xl p-4 w-[280px]">
-          <p className="text-[9px] font-bold text-text-muted uppercase tracking-widest mb-3">{label}</p>
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:absolute sm:top-full sm:left-auto sm:right-0 sm:translate-x-0 sm:translate-y-0 sm:mt-2 z-50 bg-white rounded-2xl border border-slate-100 shadow-xl p-4 w-[280px]">
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-3">{label}</p>
           <div className="flex items-center justify-between mb-3">
-            <button type="button" onClick={prev} className="p-1.5 rounded-lg hover:bg-bg transition"><ChevronLeft className="w-4 h-4 text-text-muted" /></button>
-            <span className="text-sm font-bold text-text">{MONTH_NAMES[viewMonth]} {viewYear}</span>
-            <button type="button" onClick={next} className="p-1.5 rounded-lg hover:bg-bg transition"><ChevronRight className="w-4 h-4 text-text-muted" /></button>
+            <button type="button" onClick={prev} className="p-1.5 rounded-lg hover:bg-slate-50 transition"><ChevronLeft className="w-4 h-4 text-slate-400" /></button>
+            <span className="text-sm font-bold text-slate-800">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+            <button type="button" onClick={next} className="p-1.5 rounded-lg hover:bg-slate-50 transition"><ChevronRight className="w-4 h-4 text-slate-400" /></button>
           </div>
           <div className="grid grid-cols-7 mb-1">
-            {CAL_DAYS.map(d => <div key={d} className="text-center text-[10px] font-bold text-text-muted/50 py-1">{d}</div>)}
+            {CAL_DAYS.map(d => <div key={d} className="text-center text-[10px] font-bold text-slate-300 py-1">{d}</div>)}
           </div>
           <div className="grid grid-cols-7 gap-px">
             {cells.map((c, i) => {
@@ -83,16 +83,17 @@ function DatePicker({ value, onChange, label }: { value: string; onChange: (v: s
               return (
                 <button key={i} type="button" onClick={() => { onChange(c.dateStr); setOpen(false); }}
                   className={`h-8 rounded-lg text-xs font-medium transition-all ${
-                    isSelected ? "bg-blue-600 text-white font-bold shadow-sm"
-                      : isToday ? "ring-1 ring-blue-400 text-blue-600 font-bold"
-                        : c.current ? "text-text hover:bg-blue-50 hover:text-blue-700" : "text-text-muted/30"
-                  }`}>{c.day}</button>
+                    isSelected ? "text-white font-bold shadow-sm"
+                      : isToday ? "ring-1 ring-indigo-400 text-[#4F46E5] font-bold"
+                        : c.current ? "text-slate-700 hover:bg-indigo-50 hover:text-indigo-700" : "text-slate-300"
+                  }`}
+                  style={isSelected ? { background: "linear-gradient(135deg, #4F46E5, #3730A3)" } : {}}>{c.day}</button>
               );
             })}
           </div>
-          <div className="mt-3 pt-3 border-t border-border flex justify-between">
-            <button type="button" onClick={() => { onChange(toStr(new Date())); setOpen(false); }} className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition">Today</button>
-            <button type="button" onClick={() => setOpen(false)} className="text-[11px] font-semibold text-text-muted hover:text-text transition">Close</button>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between">
+            <button type="button" onClick={() => { onChange(toStr(new Date())); setOpen(false); }} className="text-[11px] font-semibold text-[#4F46E5] hover:text-[#3730A3] transition">Today</button>
+            <button type="button" onClick={() => setOpen(false)} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 transition">Close</button>
           </div>
         </motion.div>
         </>
@@ -124,18 +125,11 @@ const formatTime12 = (t: string) => {
 const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-4 py-3 text-xs">
+    <div className="bg-white/95 backdrop-blur-sm border border-slate-100 rounded-xl shadow-xl px-4 py-3 text-xs">
       <p className="font-semibold text-slate-500 mb-1">{label}</p>
-      <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-primary" /><span className="text-slate-400">Attendance:</span><span className="font-bold text-slate-700">{payload[0].value}</span></div>
+      <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#4F46E5]" /><span className="text-slate-400">Attendance:</span><span className="font-bold text-slate-700">{payload[0].value}</span></div>
     </div>
   );
-};
-
-const greetingText = () => {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
 };
 
 export default function DashboardPage() {
@@ -197,31 +191,58 @@ export default function DashboardPage() {
   return (
     <AppShell title="Dashboard">
       <div className="space-y-6">
-        {/* Greeting + Quick Action */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-text">{greetingText()}, {user?.name?.split(" ")[0] ?? "Teacher"}</h1>
-            <p className="text-sm text-text-muted mt-0.5">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>
-          </div>
+        {/* Quick Action */}
+        <div className="flex items-center justify-end">
           <Button onClick={() => router.push("/scanner")} className="hidden sm:flex"><ScanLine className="h-4 w-4" /> Start Scanning</Button>
         </div>
 
         {/* Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { label: "TODAY'S SCANS", value: dashboard?.todayCount ?? 0, sub: `${dashboard?.todayCount ?? 0} attendance marked`, gradient: "from-emerald-600 to-teal-600", iconBg: "bg-white/15", icon: <CheckCircle className="w-5 h-5" /> },
-            { label: "STUDENTS", value: students?.length ?? 0, sub: "Total enrolled", gradient: "from-blue-600 to-indigo-600", iconBg: "bg-white/15", icon: <Users className="w-5 h-5" /> },
-            { label: "CLASSES", value: classes?.length ?? 0, sub: "Active classes", gradient: "from-violet-600 to-purple-600", iconBg: "bg-white/15", icon: <BookOpen className="w-5 h-5" /> },
-            { label: "UPCOMING", value: upcoming.length, sub: "This week", gradient: "from-amber-500 to-orange-500", iconBg: "bg-white/15", icon: <CalendarIcon className="w-5 h-5" /> },
+            { label: "TODAY'S SCANS", value: dashboard?.todayCount ?? 0, sub: `${dashboard?.todayCount ?? 0} attendance marked`, gradient: "from-[#4F46E5] to-[#3730A3]", lightBg: "bg-indigo-50", lightText: "text-indigo-600", accentColor: "#4F46E5", icon: <CheckCircle className="w-5 h-5" />, trend: "+12%", up: true },
+            { label: "STUDENTS", value: students?.length ?? 0, sub: "Total enrolled", gradient: "from-emerald-500 to-emerald-600", lightBg: "bg-emerald-50", lightText: "text-emerald-600", accentColor: "#10b981", icon: <Users className="w-5 h-5" />, trend: "+3", up: true },
+            { label: "CLASSES", value: classes?.length ?? 0, sub: "Active classes", gradient: "from-violet-500 to-purple-600", lightBg: "bg-violet-50", lightText: "text-violet-600", accentColor: "#8b5cf6", icon: <BookOpen className="w-5 h-5" />, trend: "Stable", up: null },
+            { label: "UPCOMING", value: upcoming.length, sub: "This week", gradient: "from-amber-500 to-orange-500", lightBg: "bg-amber-50", lightText: "text-amber-600", accentColor: "#f59e0b", icon: <CalendarIcon className="w-5 h-5" />, trend: upcoming.length > 0 ? `${upcoming.length} sessions` : "None", up: upcoming.length > 0 ? true : null },
           ].map((card, i) => (
             <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-              className={`bg-gradient-to-br ${card.gradient} rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow duration-200 hover:-translate-y-0.5`}>
-              <div className="flex items-start justify-between mb-4">
-                <p className="text-xs font-bold text-white/70 uppercase tracking-widest">{card.label}</p>
-                <div className={`w-10 h-10 rounded-xl ${card.iconBg} flex items-center justify-center text-white`}>{card.icon}</div>
+              className="relative bg-white rounded-2xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] transition-all duration-200 overflow-hidden group">
+              {/* Decorative background sparkline */}
+              <svg className="absolute bottom-0 right-0 w-28 h-16 opacity-[0.06] group-hover:opacity-[0.1] transition-opacity" viewBox="0 0 120 60" fill="none">
+                <path d="M0 55 Q20 45 30 35 T60 20 T90 30 T120 10" stroke={card.accentColor} strokeWidth="3" fill="none" />
+                <path d="M0 55 Q20 45 30 35 T60 20 T90 30 T120 10 V60 H0 Z" fill={card.accentColor} opacity="0.3" />
+              </svg>
+              <div className="relative">
+                <div className="flex items-start justify-between mb-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</p>
+                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-white shadow-md`}>
+                    {card.icon}
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-slate-800 leading-tight">{card.value}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-[11px] text-slate-400">{card.sub}</p>
+                  {card.trend && (
+                    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md ${card.up === true ? "bg-emerald-50" : card.up === false ? "bg-red-50" : "bg-slate-50"}`}>
+                      {card.up === true && (
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-emerald-500">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+                        </svg>
+                      )}
+                      {card.up === false && (
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-red-500">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6L9 12.75l4.286-4.286a11.948 11.948 0 014.306 6.43l.776 2.898m0 0l3.182-5.511m-3.182 5.51l-5.511-3.181" />
+                        </svg>
+                      )}
+                      {card.up === null && (
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-slate-400">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15" />
+                        </svg>
+                      )}
+                      <span className={`text-[10px] font-semibold ${card.up === true ? "text-emerald-600" : card.up === false ? "text-red-500" : "text-slate-400"}`}>{card.trend}</span>
+                    </div>
+                  )}
+                </div>
               </div>
-              <p className="text-3xl font-bold text-white leading-tight">{card.value}</p>
-              <p className="text-xs text-white/60 mt-1">{card.sub}</p>
             </motion.div>
           ))}
         </div>
@@ -232,12 +253,12 @@ export default function DashboardPage() {
         {/* ROW 1: Chart (3/4) + Recent Attendance (1/4) */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-            className="lg:col-span-3 bg-bg-card rounded-2xl border border-border overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5">
+            className="lg:col-span-3 bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 overflow-hidden">
+            <div className="bg-gradient-to-r from-[#4F46E5] to-[#3730A3] px-6 py-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="font-semibold text-white">Attendance Overview</h2>
-                  <p className="text-xs text-blue-100/70 mt-0.5">Daily attendance count</p>
+                  <p className="text-xs text-indigo-200/70 mt-0.5">Daily attendance count</p>
                 </div>
                 <div className="relative">
                   <button type="button" onClick={() => { setClassDropdownOpen(!classDropdownOpen); setClassSearchQuery(""); }}
@@ -258,29 +279,29 @@ export default function DashboardPage() {
                     {classDropdownOpen && (<>
                       <div className="fixed inset-0 z-30" onClick={() => setClassDropdownOpen(false)} />
                       <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.15 }}
-                        className="absolute right-0 top-full mt-1.5 z-40 bg-bg-card rounded-xl border border-border shadow-xl overflow-hidden min-w-[220px]">
-                        <div className="p-2 border-b border-border">
+                        className="absolute right-0 top-full mt-1.5 z-40 bg-white rounded-xl border border-slate-100 shadow-xl overflow-hidden min-w-[220px]">
+                        <div className="p-2 border-b border-slate-100">
                           <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                             <input value={classSearchQuery} onChange={e => setClassSearchQuery(e.target.value)} placeholder="Search classes..." autoFocus
-                              className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-bg text-xs text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                              className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
                           </div>
                         </div>
                         <div className="max-h-[200px] overflow-y-auto p-1.5">
                           <button type="button" onClick={() => { setChartClass(""); setClassDropdownOpen(false); }}
-                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs font-medium transition-all ${!chartClass ? "bg-primary/[0.07] text-primary font-semibold" : "text-text hover:bg-bg/80"}`}>
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs font-medium transition-all ${!chartClass ? "bg-indigo-50 text-[#4F46E5] font-semibold" : "text-slate-600 hover:bg-slate-50"}`}>
                             <BookOpen className="w-3.5 h-3.5 opacity-40" /> All Classes
                           </button>
                           {(() => {
                             const filtered = (classes ?? []).filter(c => !classSearchQuery.trim() || c.name.toLowerCase().includes(classSearchQuery.toLowerCase()));
                             return filtered.length === 0 ? (
-                              <p className="text-xs text-text-muted text-center py-4">No classes found</p>
+                              <p className="text-xs text-slate-400 text-center py-4">No classes found</p>
                             ) : filtered.map(c => (
                               <button type="button" key={c.id} onClick={() => { setChartClass(c.id); setClassDropdownOpen(false); }}
-                                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs font-medium transition-all ${chartClass === c.id ? "bg-primary/[0.07] text-primary font-semibold" : "text-text hover:bg-bg/80"}`}>
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs font-medium transition-all ${chartClass === c.id ? "bg-indigo-50 text-[#4F46E5] font-semibold" : "text-slate-600 hover:bg-slate-50"}`}>
                                 <BookOpen className="w-3.5 h-3.5 opacity-40" />
                                 <span className="flex-1 truncate">{c.name}</span>
-                                {c.grade && <span className="text-[10px] text-text-muted bg-bg px-1.5 py-0.5 rounded-md">G{c.grade}</span>}
+                                {c.grade && <span className="text-[10px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-md">G{c.grade}</span>}
                               </button>
                             ));
                           })()}
@@ -295,7 +316,7 @@ export default function DashboardPage() {
                   <button key={p} onClick={() => applyPreset(p)}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                       chartPreset === p
-                        ? "text-blue-700 bg-white shadow-sm"
+                        ? "text-indigo-700 bg-white shadow-sm"
                         : "text-white/70 bg-white/10 hover:bg-white/20 hover:text-white"
                     }`}>{p}</button>
                 ))}
@@ -316,26 +337,25 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-            <div className="px-4 pt-4 pb-3">
-              {chartLoading ? (<div className="h-[240px] flex items-center justify-center text-text-muted text-sm">Loading...</div>
+            <div className="px-2 pt-4 pb-2">
+              {chartLoading ? (<div className="h-[240px] flex items-center justify-center text-slate-400 text-sm">Loading...</div>
               ) : chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={240}>
                   <AreaChart data={chartData} margin={{ top: 4, right: 12, left: -12, bottom: 0 }}>
-                    <defs><linearGradient id="attendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4F46E5" stopOpacity={0.12} /><stop offset="100%" stopColor="#4F46E5" stopOpacity={0} /></linearGradient></defs>
+                    <defs><linearGradient id="attendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4F46E5" stopOpacity={0.15} /><stop offset="100%" stopColor="#4F46E5" stopOpacity={0} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={32} allowDecimals={false} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Area type="monotone" dataKey="count" stroke="#4F46E5" strokeWidth={2} fill="url(#attendGrad)" dot={{ r: 3, fill: "#4F46E5", strokeWidth: 0 }} activeDot={{ r: 5, fill: "#4F46E5" }} />
+                    <Area type="monotone" dataKey="count" stroke="#4F46E5" strokeWidth={2.5} fill="url(#attendGrad)" dot={{ r: 4, fill: "#4F46E5", strokeWidth: 0 }} activeDot={{ r: 6, fill: "#4F46E5" }} />
                   </AreaChart>
                 </ResponsiveContainer>
-              ) : (<div className="h-[240px] flex items-center justify-center text-text-muted text-sm">No data for selected range</div>)}
+              ) : (<div className="h-[240px] flex items-center justify-center text-slate-400 text-sm">No data for selected range</div>)}
             </div>
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-            className="bg-bg-card rounded-2xl border border-border overflow-hidden flex flex-col">
-            {/* Gradient header */}
+            className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 overflow-hidden flex flex-col">
             <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -343,7 +363,7 @@ export default function DashboardPage() {
                   <p className="text-emerald-100/70 text-xs mt-0.5">Live attendance feed</p>
                 </div>
                 <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
-                  <ScanLine className="w-4.5 h-4.5 text-white" />
+                  <ScanLine className="w-4 h-4 text-white" />
                 </div>
               </div>
               {(dashboard?.todayCount ?? 0) > 0 && (
@@ -355,22 +375,22 @@ export default function DashboardPage() {
             </div>
             <div className="flex-1 overflow-y-auto">
               {(!dashboard?.recentToday || dashboard.recentToday.length === 0) ? (
-                <div className="flex flex-col items-center justify-center py-12 text-text-muted">
+                <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                   <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center mb-3">
                     <ScanLine className="w-6 h-6 text-emerald-300" />
                   </div>
                   <p className="text-xs font-medium">No scans yet today</p>
-                  <p className="text-[10px] text-text-muted/60 mt-0.5">Start scanning to see activity</p>
+                  <p className="text-[10px] text-slate-300 mt-0.5">Start scanning to see activity</p>
                 </div>
               ) : dashboard.recentToday.slice(0, 5).map((r, i) => (
                 <motion.div key={r.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 + i * 0.05 }}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50/40 transition-colors border-b border-border/50 last:border-b-0 group">
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50/40 transition-colors border-b border-slate-50 last:border-b-0 group">
                   <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0 shadow-sm">
                     <span className="text-[11px] font-bold text-white">{r.studentName?.charAt(0)?.toUpperCase()}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-text truncate">{r.studentName}</p>
-                    <p className="text-[10px] text-text-muted truncate">{r.className}</p>
+                    <p className="text-xs font-semibold text-slate-700 truncate">{r.studentName}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{r.className}</p>
                   </div>
                   {r.checkInTime && (
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 flex-shrink-0">
@@ -386,7 +406,7 @@ export default function DashboardPage() {
 
         {/* ROW 2: Week Calendar Preview (full width) */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-          className="bg-bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-4 flex items-center justify-between">
             <div>
@@ -406,7 +426,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Mobile: stacked list view */}
-          <div className="md:hidden divide-y divide-border">
+          <div className="md:hidden divide-y divide-slate-100">
             {weekDays.map((d, idx) => {
               const ds = toStr(d);
               const isToday = ds === todayStr;
@@ -417,16 +437,16 @@ export default function DashboardPage() {
                 <div key={ds} className={`px-4 py-3 ${isToday ? "bg-indigo-50/40" : ""}`}>
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${
-                      isToday ? "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-md shadow-indigo-300/40" : "bg-bg border border-border"
+                      isToday ? "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-md shadow-indigo-300/40" : "bg-slate-50 border border-slate-200"
                     }`}>
-                      <span className={`text-[9px] font-bold uppercase leading-none ${isToday ? "text-white/80" : "text-text-muted"}`}>{DAYS_SHORT[d.getDay()]}</span>
-                      <span className={`text-sm font-bold leading-tight ${isToday ? "text-white" : isPast ? "text-text-muted/40" : "text-text"}`}>{d.getDate()}</span>
+                      <span className={`text-[9px] font-bold uppercase leading-none ${isToday ? "text-white/80" : "text-slate-400"}`}>{DAYS_SHORT[d.getDay()]}</span>
+                      <span className={`text-sm font-bold leading-tight ${isToday ? "text-white" : isPast ? "text-slate-300" : "text-slate-700"}`}>{d.getDate()}</span>
                     </div>
                     <div className="flex-1">
-                      <span className={`text-xs font-semibold ${isToday ? "text-indigo-600" : "text-text"}`}>
+                      <span className={`text-xs font-semibold ${isToday ? "text-indigo-600" : "text-slate-700"}`}>
                         {d.toLocaleDateString("en-US", { weekday: "long" })}
                       </span>
-                      <span className="text-[10px] text-text-muted ml-2">{dayEvents.length ? `${dayEvents.length} class${dayEvents.length !== 1 ? "es" : ""}` : "Free"}</span>
+                      <span className="text-[10px] text-slate-400 ml-2">{dayEvents.length ? `${dayEvents.length} class${dayEvents.length !== 1 ? "es" : ""}` : "Free"}</span>
                     </div>
                   </div>
                   {dayEvents.length > 0 && (
@@ -464,20 +484,20 @@ export default function DashboardPage() {
           {/* Desktop: 7-column grid view */}
           <div className="hidden md:block">
             {/* Day header row */}
-            <div className="grid grid-cols-7 border-b border-border bg-gradient-to-r from-slate-50/80 to-gray-50/80">
+            <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/50">
               {weekDays.map((d) => {
                 const ds = toStr(d);
                 const isToday = ds === todayStr;
                 const isPast = ds < todayStr;
                 return (
-                  <div key={ds} className={`flex flex-col items-center py-3 border-r border-border/40 last:border-r-0 transition-colors ${isToday ? "bg-indigo-50/60" : ""}`}>
-                    <span className={`text-[10px] font-bold uppercase tracking-widest ${isToday ? "text-indigo-500" : isPast ? "text-text-muted/40" : "text-text-muted"}`}>
+                  <div key={ds} className={`flex flex-col items-center py-3 border-r border-slate-100/40 last:border-r-0 transition-colors ${isToday ? "bg-indigo-50/60" : ""}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${isToday ? "text-indigo-500" : isPast ? "text-slate-300" : "text-slate-400"}`}>
                       {DAYS_SHORT[d.getDay()]}
                     </span>
                     <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center ${
                       isToday ? "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-300/40" : ""
                     }`}>
-                      <span className={`text-sm font-bold ${isToday ? "text-white" : isPast ? "text-text-muted/35" : "text-text"}`}>
+                      <span className={`text-sm font-bold ${isToday ? "text-white" : isPast ? "text-slate-300" : "text-slate-700"}`}>
                         {d.getDate()}
                       </span>
                     </div>
@@ -495,13 +515,13 @@ export default function DashboardPage() {
                 const isPast = ds < todayStr;
                 const dayEvents = eventsByDate[ds] ?? [];
                 return (
-                  <div key={ds} className={`border-r border-border/40 last:border-r-0 p-1.5 flex flex-col gap-1.5 h-[280px] ${
+                  <div key={ds} className={`border-r border-slate-100/40 last:border-r-0 p-1.5 flex flex-col gap-1.5 h-[280px] ${
                     isToday ? "bg-indigo-50/30" : isPast ? "bg-gray-50/30" : ""
                   }`}>
                     {dayEvents.length === 0 ? (
                       <div className="flex-1 flex flex-col items-center justify-center opacity-20">
-                        <CalendarIcon className="w-5 h-5 text-text-muted mb-1" />
-                        <p className="text-[9px] text-text-muted font-medium">Free</p>
+                        <CalendarIcon className="w-5 h-5 text-slate-300 mb-1" />
+                        <p className="text-[9px] text-slate-300 font-medium">Free</p>
                       </div>
                     ) : (
                       dayEvents.slice(0, 4).map((ev, evIdx) => {
@@ -546,13 +566,13 @@ export default function DashboardPage() {
             </div>
 
             {/* Footer summary row */}
-            <div className="grid grid-cols-7 border-t border-border/60 bg-gradient-to-r from-slate-50/60 to-gray-50/60">
+            <div className="grid grid-cols-7 border-t border-slate-100 bg-slate-50/50">
               {weekDays.map((d) => {
                 const ds = toStr(d);
                 const isToday = ds === todayStr;
                 const count = (eventsByDate[ds] ?? []).length;
                 return (
-                  <div key={`f-${ds}`} className="text-center py-1.5 border-r border-border/40 last:border-r-0">
+                  <div key={`f-${ds}`} className="text-center py-1.5 border-r border-slate-100/40 last:border-r-0">
                     {count > 0 ? (
                       <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
                         isToday ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"

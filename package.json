@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@heroui/react": "^3.0.2",
     "@types/react-big-calendar": "^1.16.3",
     "axios": "^1.7.9",
     "clsx": "^2.1.1",
