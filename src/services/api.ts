@@ -161,4 +161,11 @@ export const sendEmailOtp = (newEmail: string) =>
 export const changeTeacherEmail = (newEmail: string, otp: string) =>
   api.put<ApiResponse<TeacherProfile>>("/settings/email", { newEmail, otp }).then((r) => r.data.data);
 
+// Academic Year Config
+export const getAcademicYearConfig = () =>
+  api.get<ApiResponse<{ nextUpgradeDate: string; lastUpgradedAt: string | null }>>("/settings/academic-year").then((r) => r.data.data);
+
+export const updateAcademicYearConfig = (data: { nextUpgradeDate: string }) =>
+  api.put<ApiResponse<{ nextUpgradeDate: string; lastUpgradedAt: string | null }>>("/settings/academic-year", data).then((r) => r.data.data);
+
 export default api;

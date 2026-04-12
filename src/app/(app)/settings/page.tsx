@@ -1,14 +1,15 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen } from "lucide-react";
+import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen, Calendar, GraduationCap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
+import DatePicker from "@/components/shared/DatePicker";
 import { useAuth } from "@/lib/auth";
 import { useFetch } from "@/hooks/useFetch";
-import { getTeacherProfile, updateTeacherProfile, changeTeacherPassword, sendEmailOtp, changeTeacherEmail } from "@/services/api";
+import { getTeacherProfile, updateTeacherProfile, changeTeacherPassword, sendEmailOtp, changeTeacherEmail, getAcademicYearConfig, updateAcademicYearConfig } from "@/services/api";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 
-type Tab = "profile" | "password";
+type Tab = "profile" | "password" | "academic";
 
 export default function SettingsPage() {
   const { updateUser } = useAuth();
@@ -44,6 +45,13 @@ export default function SettingsPage() {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Academic year
+  const fetchAcademicConfig = useCallback(() => getAcademicYearConfig(), []);
+  const { data: academicConfig, loading: academicLoading, refetch: refetchAcademic } = useFetch(fetchAcademicConfig);
+  const [nextUpgradeDate, setNextUpgradeDate] = useState("");
+  const [academicSaving, setAcademicSaving] = useState(false);
+  const [academicMsg, setAcademicMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   useEffect(() => {
     if (profile) {
       setName(profile.name ?? "");
@@ -52,6 +60,12 @@ export default function SettingsPage() {
       setEmail(profile.email ?? "");
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (academicConfig) {
+      setNextUpgradeDate(academicConfig.nextUpgradeDate ?? "");
+    }
+  }, [academicConfig]);
 
   // Cooldown timer
   useEffect(() => {
@@ -166,9 +180,32 @@ export default function SettingsPage() {
     }
   };
 
-  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "profile", label: "Profile", icon: <User className="w-4 h-4" /> },
-    { key: "password", label: "Password", icon: <Lock className="w-4 h-4" /> },
+  const handleAcademicSave = async () => {
+    if (!nextUpgradeDate) {
+      setAcademicMsg({ type: "error", text: "Please select a date" }); return;
+    }
+    if (new Date(nextUpgradeDate) <= new Date()) {
+      setAcademicMsg({ type: "error", text: "Date must be in the future" }); return;
+    }
+    setAcademicSaving(true);
+    setAcademicMsg(null);
+    try {
+      await updateAcademicYearConfig({ nextUpgradeDate });
+      setAcademicMsg({ type: "success", text: "Next grade upgrade date updated" });
+      refetchAcademic();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        || (e instanceof Error ? e.message : "Failed to update");
+      setAcademicMsg({ type: "error", text: msg });
+    } finally {
+      setAcademicSaving(false);
+    }
+  };
+
+  const tabs: { key: Tab; label: string; shortLabel: string; icon: React.ReactNode }[] = [
+    { key: "profile", label: "Profile", shortLabel: "Profile", icon: <User className="w-4 h-4" /> },
+    { key: "password", label: "Password", shortLabel: "Password", icon: <Lock className="w-4 h-4" /> },
+    { key: "academic", label: "Academic Year", shortLabel: "Academic", icon: <BookOpen className="w-4 h-4" /> },
   ];
 
   if (loading && !profile) return <PageSkeleton />;
@@ -181,12 +218,38 @@ export default function SettingsPage() {
           <p className="text-xs text-text-muted mt-0.5">Manage your account details and security</p>
         </div>
 
+        {/* Next Grade Upgrade Banner - always visible */}
+        {academicConfig?.nextUpgradeDate && (
+          <div className="rounded-2xl bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border border-amber-200/60 p-4 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md flex-shrink-0">
+              <GraduationCap className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold text-amber-600/70 uppercase tracking-widest">Next Grade Upgrade</p>
+              <p className="text-sm font-bold text-text mt-0.5">
+                {new Date(academicConfig.nextUpgradeDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "long", day: "numeric" })}
+              </p>
+            </div>
+            <div className="flex-shrink-0">
+              {(() => {
+                const days = Math.ceil((new Date(academicConfig.nextUpgradeDate + "T00:00:00").getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+                return (
+                  <div className="text-center px-3 py-1.5 rounded-xl bg-white/70 border border-amber-200/50">
+                    <p className="text-lg font-bold text-amber-600 leading-tight">{days <= 0 ? "Due" : days}</p>
+                    <p className="text-[9px] font-semibold text-amber-500/70">{days <= 0 ? "now" : days === 1 ? "day left" : "days left"}</p>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-1 bg-bg rounded-xl p-1 border border-border">
           {tabs.map(t => (
-            <button key={t.key} onClick={() => { setTab(t.key); setProfileMsg(null); setPwMsg(null); }}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${tab === t.key ? "bg-bg-card text-primary shadow-sm border border-border" : "text-text-muted hover:text-text"}`}>
-              {t.icon} {t.label}
+            <button key={t.key} onClick={() => { setTab(t.key); setProfileMsg(null); setPwMsg(null); setAcademicMsg(null); }}
+              className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${tab === t.key ? "bg-bg-card text-primary shadow-sm border border-border" : "text-text-muted hover:text-text"}`}>
+              {t.icon} <span className="sm:hidden">{t.shortLabel}</span><span className="hidden sm:inline">{t.label}</span>
             </button>
           ))}
         </div>
@@ -316,7 +379,7 @@ export default function SettingsPage() {
               </div>
             </div>
           </motion.div>
-        ) : (
+        ) : tab === "password" ? (
           <motion.div key="password" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
             className="bg-bg-card rounded-2xl border border-border overflow-hidden">
             <div className="px-6 py-4 border-b border-border">
@@ -376,7 +439,77 @@ export default function SettingsPage() {
               </div>
             </div>
           </motion.div>
-        )}
+        ) : tab === "academic" ? (
+          <motion.div key="academic" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
+            className="bg-bg-card rounded-2xl border border-border overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h3 className="font-semibold text-text text-sm">Academic Year Configuration</h3>
+              <p className="text-xs text-text-muted mt-0.5">Set when student grades automatically upgrade each year</p>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Next upgrade date highlight card */}
+              {academicConfig?.nextUpgradeDate && (
+                <div className="rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Calendar className="w-6 h-6 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-medium text-text-muted uppercase tracking-wide">Next Grade Upgrade</p>
+                      <p className="text-lg font-bold text-text mt-0.5">
+                        {new Date(academicConfig.nextUpgradeDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                      </p>
+                      <p className="text-xs text-primary font-medium mt-1">
+                        {(() => {
+                          const days = Math.ceil((new Date(academicConfig.nextUpgradeDate + "T00:00:00").getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+                          if (days <= 0) return "Upgrade is due";
+                          if (days === 1) return "Tomorrow";
+                          return `${days} days from now`;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {academicConfig?.lastUpgradedAt && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  <p className="text-xs text-emerald-700">Last upgrade: {new Date(academicConfig.lastUpgradedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-border bg-bg p-4">
+                <p className="text-xs text-text-muted">
+                  All active students will be promoted to the next grade on this date. After the upgrade runs, it automatically resets to January 1st of the following year — you can change it again anytime.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-text-muted mb-1.5 block">Change Upgrade Date</label>
+                <DatePicker
+                  value={nextUpgradeDate}
+                  onChange={setNextUpgradeDate}
+                  label="Select upgrade date"
+                  minDate={new Date().toISOString().split("T")[0]}
+                  fullWidth
+                />
+              </div>
+
+              {academicMsg && (
+                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium ${academicMsg.type === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                  {academicMsg.type === "success" ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                  {academicMsg.text}
+                </div>
+              )}
+
+              <div className="flex justify-end pt-2">
+                <Button onClick={handleAcademicSave} loading={academicSaving || academicLoading}><Save className="w-4 h-4" /> Save Configuration</Button>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
       </div>
     </>
   );

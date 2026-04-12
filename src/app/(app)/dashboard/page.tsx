@@ -6,7 +6,7 @@ import { Users, BookOpen, CheckCircle, ScanLine, Calendar as CalendarIcon, Clock
 import { useAuth } from "@/lib/auth";
 import Button from "@/components/ui/Button";
 import { useFetch } from "@/hooks/useFetch";
-import { getStudents, getClasses, getSchedules, getDashboard, getAttendance } from "@/services/api";
+import { getStudents, getClasses, getSchedules, getDashboard, getAttendance, getAcademicYearConfig } from "@/services/api";
 import DashboardCharts from "@/components/shared/DashboardCharts";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 
@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const { data: students, loading: sLoading, refetch: refetchStudents } = useFetch(useCallback(() => getStudents(), []));
   const { data: classes, loading: cLoading, refetch: refetchClasses } = useFetch(useCallback(() => getClasses(), []));
   const { data: dashboard, loading: dLoading, refetch: refetchDashboard } = useFetch(useCallback(() => getDashboard(), []));
+  const { data: academicConfig } = useFetch(useCallback(() => getAcademicYearConfig(), []));
 
   // Refetch all data when page becomes visible (e.g. navigating back from classes/students page)
   useEffect(() => {
@@ -91,6 +92,34 @@ export default function DashboardPage() {
         <div className="flex items-center justify-end">
           <Button onClick={() => router.push("/scanner")} className="w-full sm:w-auto"><ScanLine className="h-4 w-4" /> Start Scanning</Button>
         </div>
+
+        {/* Next Grade Upgrade Banner */}
+        {academicConfig?.nextUpgradeDate && (
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+            className="relative bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 rounded-2xl border border-amber-200/60 p-4 flex items-center gap-4 overflow-hidden">
+            <div className="absolute right-0 top-0 w-32 h-32 bg-gradient-to-bl from-amber-200/20 to-transparent rounded-full -translate-y-8 translate-x-8" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md flex-shrink-0">
+              <GraduationCap className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0 relative">
+              <p className="text-[10px] font-bold text-amber-600/70 uppercase tracking-widest">Next Grade Upgrade</p>
+              <p className="text-sm font-bold text-slate-800 mt-0.5">
+                {new Date(academicConfig.nextUpgradeDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "long", day: "numeric" })}
+              </p>
+            </div>
+            <div className="flex-shrink-0 relative">
+              {(() => {
+                const days = Math.ceil((new Date(academicConfig.nextUpgradeDate + "T00:00:00").getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+                return (
+                  <div className="text-center px-3 py-1.5 rounded-xl bg-white/70 border border-amber-200/50">
+                    <p className="text-lg font-bold text-amber-600 leading-tight">{days <= 0 ? "Due" : days}</p>
+                    <p className="text-[9px] font-semibold text-amber-500/70">{days <= 0 ? "now" : days === 1 ? "day left" : "days left"}</p>
+                  </div>
+                );
+              })()}
+            </div>
+          </motion.div>
+        )}
 
         {/* Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

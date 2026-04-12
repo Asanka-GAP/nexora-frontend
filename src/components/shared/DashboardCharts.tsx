@@ -1,15 +1,15 @@
 "use client";
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip,
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
 } from "recharts";
 import {
-  BookOpen, Filter, ChevronDown, ChevronLeft, ChevronRight,
+  BookOpen, Filter, ChevronDown,
   Search, X,
 } from "lucide-react";
-import { Calendar as CalIcon } from "lucide-react";
+import DatePicker from "@/components/shared/DatePicker";
 
 const toStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -17,69 +17,6 @@ const monday = (d: Date) => { const r = new Date(d); r.setDate(r.getDate() - ((r
 const sunday = (m: Date) => { const r = new Date(m); r.setDate(r.getDate() + 6); return r; };
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const CAL_DAYS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
-
-/* ── tiny date picker ── */
-function DatePicker({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const current = new Date(value + "T00:00:00");
-  const [viewMonth, setViewMonth] = useState(current.getMonth());
-  const [viewYear, setViewYear] = useState(current.getFullYear());
-
-  useEffect(() => { if (open) { const d = new Date(value + "T00:00:00"); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()); } }, [open, value]);
-  useEffect(() => { const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h); }, []);
-
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate();
-  const cells: { day: number; current: boolean; dateStr: string }[] = [];
-  for (let i = firstDay - 1; i >= 0; i--) { const d = prevMonthDays - i; cells.push({ day: d, current: false, dateStr: toStr(new Date(viewYear, viewMonth - 1, d)) }); }
-  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, current: true, dateStr: toStr(new Date(viewYear, viewMonth, d)) });
-  const remaining = 42 - cells.length;
-  for (let d = 1; d <= remaining; d++) cells.push({ day: d, current: false, dateStr: toStr(new Date(viewYear, viewMonth + 1, d)) });
-
-  const prev = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); } else setViewMonth(viewMonth - 1); };
-  const next = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); } else setViewMonth(viewMonth + 1); };
-
-  return (
-    <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen(!open)}
-        className={`flex items-center gap-2 pl-3 pr-3.5 py-1.5 rounded-xl border bg-white transition-all cursor-pointer ${open ? "border-indigo-400 ring-2 ring-indigo-100" : "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"}`}>
-        <CalIcon className="w-3.5 h-3.5 text-[#4F46E5]" />
-        <span className="text-xs font-semibold text-slate-800">{current.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-      </button>
-      {open && (<>
-        <div className="fixed inset-0 z-40 bg-black/20 sm:hidden" onClick={() => setOpen(false)} />
-        <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.15 }}
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:absolute sm:top-full sm:left-auto sm:right-0 sm:translate-x-0 sm:translate-y-0 sm:mt-2 z-50 bg-white rounded-2xl border border-slate-100 shadow-xl p-4 w-[280px]">
-          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-3">{label}</p>
-          <div className="flex items-center justify-between mb-3">
-            <button type="button" onClick={prev} className="p-1.5 rounded-lg hover:bg-slate-50 transition"><ChevronLeft className="w-4 h-4 text-slate-400" /></button>
-            <span className="text-sm font-bold text-slate-800">{MONTH_NAMES[viewMonth]} {viewYear}</span>
-            <button type="button" onClick={next} className="p-1.5 rounded-lg hover:bg-slate-50 transition"><ChevronRight className="w-4 h-4 text-slate-400" /></button>
-          </div>
-          <div className="grid grid-cols-7 mb-1">{CAL_DAYS.map(d => <div key={d} className="text-center text-[10px] font-bold text-slate-300 py-1">{d}</div>)}</div>
-          <div className="grid grid-cols-7 gap-px">
-            {cells.map((c, i) => {
-              const isSelected = c.dateStr === value;
-              const isToday = c.dateStr === toStr(new Date());
-              return (
-                <button key={i} type="button" onClick={() => { onChange(c.dateStr); setOpen(false); }}
-                  className={`h-8 rounded-lg text-xs font-medium transition-all ${isSelected ? "text-white font-bold shadow-sm" : isToday ? "ring-1 ring-indigo-400 text-[#4F46E5] font-bold" : c.current ? "text-slate-700 hover:bg-indigo-50 hover:text-indigo-700" : "text-slate-300"}`}
-                  style={isSelected ? { background: "linear-gradient(135deg, #4F46E5, #3730A3)" } : {}}>{c.day}</button>
-              );
-            })}
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between">
-            <button type="button" onClick={() => { onChange(toStr(new Date())); setOpen(false); }} className="text-[11px] font-semibold text-[#4F46E5] hover:text-[#3730A3] transition">Today</button>
-            <button type="button" onClick={() => setOpen(false)} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 transition">Close</button>
-          </div>
-        </motion.div>
-      </>)}
-    </div>
-  );
-}
 
 /* ── tooltip ── */
 const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) => {
@@ -181,7 +118,7 @@ export default function DashboardCharts({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-white via-white to-indigo-50/30 rounded-2xl shadow-lg border border-slate-100/50 p-6 relative overflow-hidden flex flex-col"
+        className="bg-gradient-to-br from-white via-white to-indigo-50/30 rounded-2xl shadow-lg border border-slate-100/50 p-6 relative overflow-visible flex flex-col"
       >
         <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-indigo-100/20 to-transparent rounded-full -translate-y-12 translate-x-12" />
 
@@ -253,27 +190,20 @@ export default function DashboardCharts({
 
           {/* Presets + date pickers */}
           <div className="flex items-center gap-2 flex-wrap mb-4">
-            {["This Week", "Last Week", "This Month", "Last Month"].map(p => (
-              <button key={p} onClick={() => applyPreset(p)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${chartPreset === p ? "text-white shadow-md" : "bg-slate-50 text-slate-600 hover:bg-slate-100"}`}
-                style={chartPreset === p ? { background: "linear-gradient(135deg, #4F46E5, #3730A3)" } : {}}>
-                {p}
-              </button>
-            ))}
+            <div className="flex items-center gap-2 flex-wrap">
+              {["This Week", "Last Week", "This Month", "Last Month"].map(p => (
+                <button key={p} onClick={() => applyPreset(p)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${chartPreset === p ? "text-white shadow-md" : "bg-slate-50 text-slate-600 hover:bg-slate-100"}`}
+                  style={chartPreset === p ? { background: "linear-gradient(135deg, #4F46E5, #3730A3)" } : {}}>
+                  {p}
+                </button>
+              ))}
+            </div>
             <div className="w-px h-5 bg-slate-200 mx-1 hidden sm:block" />
-            <div className="flex items-center gap-2">
-              <div className="hidden sm:contents">
-                <DatePicker value={chartFrom} onChange={v => { setChartFrom(v); setChartPreset(null); }} label="From" />
-                <div className="w-4 h-px bg-slate-300" />
-                <DatePicker value={chartTo} onChange={v => { setChartTo(v); setChartPreset(null); }} label="To" />
-              </div>
-              <div className="flex sm:hidden items-center gap-2">
-                <input type="date" value={chartFrom} onChange={e => { setChartFrom(e.target.value); setChartPreset(null); }}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-50 text-slate-700 text-xs font-medium border border-slate-200 outline-none w-[115px]" />
-                <div className="w-3 h-px bg-slate-300" />
-                <input type="date" value={chartTo} onChange={e => { setChartTo(e.target.value); setChartPreset(null); }}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-50 text-slate-700 text-xs font-medium border border-slate-200 outline-none w-[115px]" />
-              </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <DatePicker value={chartFrom} onChange={v => { setChartFrom(v); setChartPreset(null); }} label="From" />
+              <div className="w-4 h-px bg-slate-300" />
+              <DatePicker value={chartTo} onChange={v => { setChartTo(v); setChartPreset(null); }} label="To" />
             </div>
           </div>
 
