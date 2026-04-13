@@ -90,7 +90,7 @@ export const deleteClassApi = (id: string) =>
 export const cancelClass = (id: string, reason?: string) =>
   api.post(`/classes/${id}/cancel`, reason ? { reason } : {});
 
-export const addScheduleToClass = (classId: string, entry: { dayOfWeek: number; startTime: string; endTime: string }) =>
+export const addScheduleToClass = (classId: string, entry: { scheduleType: string; dayOfWeek?: number; sessionDate?: string; startTime: string; endTime: string }) =>
   api.post<ApiResponse<ClassItem>>(`/classes/${classId}/schedules`, entry).then((r) => r.data.data);
 
 export const deleteScheduleFromClass = (classId: string, scheduleId: string) =>
@@ -111,8 +111,18 @@ export const getAttendance = (params?: { classId?: string; from?: string; to?: s
 export const getTodayAttendanceCount = () =>
   api.get<ApiResponse<number>>("/attendance/today-count").then((r) => r.data.data);
 
+export const getStudentAttendance = (studentId: string, params?: { from?: string; to?: string }) => {
+  const clean: Record<string, string> = {};
+  if (params?.from) clean.from = params.from;
+  if (params?.to) clean.to = params.to;
+  return api.get<ApiResponse<AttendanceRecord[]>>(`/attendance/student/${studentId}`, { params: clean }).then((r) => r.data.data);
+};
+
 export const getDashboard = () =>
   api.get<ApiResponse<{ todayCount: number; weekTrend: { date: string; count: number }[]; recentToday: AttendanceRecord[] }>>("/attendance/dashboard").then((r) => r.data.data);
+
+export const getDashboardChartSummary = () =>
+  api.get<ApiResponse<{ classOverview: { name: string; fullName: string; students: number }[]; gradeDistribution: { grade: string; gradeNum: number; count: number }[]; totalStudents: number }>>("/attendance/dashboard/chart-summary").then((r) => r.data.data);
 
 // Schedules
 export const getSchedules = (params?: { status?: string; from?: string; to?: string }) => {
@@ -121,6 +131,13 @@ export const getSchedules = (params?: { status?: string; from?: string; to?: str
   if (params?.to) clean.to = params.to;
   if (params?.status) clean.status = params.status;
   return api.get<ApiResponse<Schedule[]>>("/schedules", { params: clean }).then((r) => r.data.data).catch(() => [] as Schedule[]);
+};
+
+export const getClassSessions = (classId: string, params?: { from?: string; to?: string }) => {
+  const clean: Record<string, string> = {};
+  if (params?.from) clean.from = params.from;
+  if (params?.to) clean.to = params.to;
+  return api.get<ApiResponse<Schedule[]>>(`/schedules/class/${classId}`, { params: clean }).then((r) => r.data.data);
 };
 
 export const cancelSchedule = (id: string, reason?: string) =>

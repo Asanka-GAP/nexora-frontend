@@ -135,7 +135,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="h-screen w-full flex bg-slate-50 overflow-hidden">
+    <main className="force-light h-screen w-full flex bg-slate-50 overflow-hidden">
       <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden flex-col justify-between p-12" style={{ background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)" }}>
         <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-white/10" /><div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-white/5" /><div className="absolute top-1/2 left-1/3 w-48 h-48 rounded-full bg-white/5" />
         <div className="relative z-10 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center"><span className="text-white font-black text-lg">N</span></div><span className="text-white font-bold text-xl">Nexora</span></div>
@@ -176,7 +176,7 @@ export default function LoginPage() {
         <div className="flex-1 flex items-start lg:items-center justify-center px-5 sm:px-6 pt-5 pb-8 lg:py-0">
           <div className="w-full max-w-md lg:max-w-lg">
             {/* Mobile card wrapper */}
-            <div className="lg:bg-transparent lg:shadow-none lg:border-0 lg:p-0 lg:rounded-none bg-white rounded-2xl shadow-lg border border-slate-100/80 p-6 sm:p-8">
+            <div className="max-lg:bg-white max-lg:rounded-2xl max-lg:shadow-lg max-lg:border max-lg:border-slate-100/80 max-lg:p-6 max-sm:p-6 sm:max-lg:p-8">
           <AnimatePresence mode="wait">
             {step === "login" && (
               <motion.div key="login" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.3 }}>

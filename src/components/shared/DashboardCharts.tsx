@@ -10,21 +10,19 @@ import {
   Search, X,
 } from "lucide-react";
 import DatePicker from "@/components/shared/DatePicker";
+import { useTheme } from "@/lib/theme";
 
 const toStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const monday = (d: Date) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); return r; };
 const sunday = (m: Date) => { const r = new Date(m); r.setDate(r.getDate() + 6); return r; };
 
-const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-
-/* ── tooltip ── */
-const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) => {
+const ChartTooltip = ({ active, payload, label, dark }: { active?: boolean; payload?: { value: number }[]; label?: string; dark?: boolean }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white/95 backdrop-blur-sm border-none rounded-2xl shadow-xl px-4 py-3 text-xs">
-      <p className="font-semibold text-slate-500 mb-1">{label}</p>
-      <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#4F46E5]" /><span className="text-slate-400">Attendance:</span><span className="font-bold text-slate-700">{payload[0].value}</span></div>
+    <div className={`backdrop-blur-sm rounded-2xl shadow-xl px-4 py-3 text-xs border ${dark ? "bg-[#1E293B]/95 border-[#334155]" : "bg-white/95 border-transparent"}`}>
+      <p className={`font-semibold mb-1 ${dark ? "text-slate-300" : "text-slate-500"}`}>{label}</p>
+      <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#4F46E5]" /><span className="text-slate-400">Attendance:</span><span className={`font-bold ${dark ? "text-white" : "text-slate-700"}`}>{payload[0].value}</span></div>
     </div>
   );
 };
@@ -40,22 +38,22 @@ const GRADE_COLORS = [
   { start: "#06B6D4", end: "#0891B2" },
 ];
 
-const BarTooltip = ({ active, payload }: { active?: boolean; payload?: { value: number; payload: { name: string } }[] }) => {
+const BarTooltip = ({ active, payload, dark }: { active?: boolean; payload?: { value: number; payload: { name: string } }[]; dark?: boolean }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white/95 backdrop-blur-sm border-none rounded-2xl shadow-xl px-4 py-3 text-xs">
-      <p className="font-bold text-slate-700 mb-1">{payload[0].payload.name}</p>
-      <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#4F46E5]" /><span className="text-slate-400">Students:</span><span className="font-bold text-slate-700">{payload[0].value}</span></div>
+    <div className={`backdrop-blur-sm rounded-2xl shadow-xl px-4 py-3 text-xs border ${dark ? "bg-[#1E293B]/95 border-[#334155]" : "bg-white/95 border-transparent"}`}>
+      <p className={`font-bold mb-1 ${dark ? "text-white" : "text-slate-700"}`}>{payload[0].payload.name}</p>
+      <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#4F46E5]" /><span className="text-slate-400">Students:</span><span className={`font-bold ${dark ? "text-white" : "text-slate-700"}`}>{payload[0].value}</span></div>
     </div>
   );
 };
 
-/* ── props ── */
 interface DashboardChartsProps {
   classes: { id: string; name: string; grade?: number; studentCount?: number }[] | null;
-  students: { id: string; currentGrade: number }[] | null;
+  chartSummary: { classOverview: { name: string; fullName: string; students: number }[]; gradeDistribution: { grade: string; gradeNum: number; count: number }[]; totalStudents: number } | null;
   chartRecords: { date: string }[] | null;
   chartLoading: boolean;
+  chartSummaryLoading: boolean;
   chartFrom: string;
   chartTo: string;
   chartClass: string;
@@ -64,36 +62,24 @@ interface DashboardChartsProps {
   setChartTo: (v: string) => void;
   setChartClass: (v: string) => void;
   setChartPreset: (v: string | null) => void;
-  loading: boolean;
 }
 
 export default function DashboardCharts({
-  classes, students, chartRecords, chartLoading,
+  classes, chartSummary, chartRecords, chartLoading, chartSummaryLoading,
   chartFrom, chartTo, chartClass, chartPreset,
   setChartFrom, setChartTo, setChartClass, setChartPreset,
-  loading,
 }: DashboardChartsProps) {
   const [classDropdownOpen, setClassDropdownOpen] = useState(false);
   const [classSearchQuery, setClassSearchQuery] = useState("");
+  const { theme } = useTheme();
+  const dk = theme === "dark";
+  const grid = dk ? "#334155" : "#E2E8F0";
+  const tick = dk ? "#94A3B8" : "#64748B";
+  const dotBg = dk ? "#151E2F" : "#ffffff";
 
-  const barData = useMemo(() => {
-    if (!classes) return [];
-    return classes
-      .map(c => ({ name: c.name.length > 12 ? c.name.slice(0, 12) + "…" : c.name, fullName: c.name, students: c.studentCount ?? 0, grade: c.grade }))
-      .sort((a, b) => b.students - a.students)
-      .slice(0, 8);
-  }, [classes]);
-
-  const gradeData = useMemo(() => {
-    if (!students) return [];
-    const map: Record<number, number> = {};
-    students.forEach(s => { map[s.currentGrade] = (map[s.currentGrade] ?? 0) + 1; });
-    return Object.entries(map)
-      .map(([grade, count]) => ({ grade: `Grade ${grade}`, count, gradeNum: Number(grade) }))
-      .sort((a, b) => a.gradeNum - b.gradeNum);
-  }, [students]);
-
-  const totalStudents = students?.length ?? 0;
+  const barData = chartSummary?.classOverview ?? [];
+  const gradeData = chartSummary?.gradeDistribution ?? [];
+  const totalStudents = chartSummary?.totalStudents ?? 0;
 
   const chartData = useMemo(() => {
     if (!chartRecords) return [];
@@ -114,39 +100,27 @@ export default function DashboardCharts({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* ── Attendance Overview (Vendora-style card) ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-white via-white to-indigo-50/30 rounded-2xl shadow-lg border border-slate-100/50 p-6 relative overflow-visible flex flex-col"
-      >
+      {/* Attendance Overview */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+        className={`rounded-2xl shadow-lg border p-6 relative overflow-visible flex flex-col ${dk ? "bg-[#151E2F] border-[#1E293B]" : "bg-gradient-to-br from-white via-white to-indigo-50/30 border-slate-100/50"}`}>
         <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-indigo-100/20 to-transparent rounded-full -translate-y-12 translate-x-12" />
-
         <div className="relative flex flex-col flex-1">
-          {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-[#4F46E5] to-[#3730A3] rounded-xl flex items-center justify-center shadow-md">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-white">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">Attendance Overview</h3>
-                <p className="text-xs text-slate-500">Daily attendance count</p>
-              </div>
+              <div><h3 className="text-lg font-bold text-slate-800">Attendance Overview</h3><p className="text-xs text-slate-500">Daily attendance count</p></div>
             </div>
-
-            {/* Class filter */}
             <div className="relative">
               <button type="button" onClick={() => { setClassDropdownOpen(!classDropdownOpen); setClassSearchQuery(""); }}
-                className={`flex items-center gap-2 pl-3 pr-3.5 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer min-w-[140px] border ${classDropdownOpen ? "border-indigo-400 ring-2 ring-indigo-100 bg-indigo-50/50" : "border-slate-200 bg-white hover:border-indigo-300"}`}>
+                className={`flex items-center gap-2 pl-3 pr-3.5 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer min-w-[140px] border ${classDropdownOpen ? "border-indigo-400 ring-2 ring-indigo-100" : "border-slate-200 hover:border-indigo-300"} ${dk ? "bg-[#0F172A]" : "bg-white"}`}>
                 <Filter className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                 <span className={`flex-1 text-left truncate ${chartClass ? "text-slate-800 font-semibold" : "text-slate-500"}`}>
                   {chartClass ? (classes ?? []).find(c => c.id === chartClass)?.name ?? "All Classes" : "All Classes"}
                 </span>
                 {chartClass ? (
-                  <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); setChartClass(""); }} onKeyDown={e => { if (e.key === "Enter") { e.stopPropagation(); setChartClass(""); } }} className="p-0.5 rounded-full hover:bg-slate-100 transition cursor-pointer outline-none focus:outline-none"><X className="w-3 h-3 text-slate-400" /></span>
+                  <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); setChartClass(""); }} onKeyDown={e => { if (e.key === "Enter") { e.stopPropagation(); setChartClass(""); } }} className="p-0.5 rounded-full hover:bg-slate-100 transition cursor-pointer outline-none"><X className="w-3 h-3 text-slate-400" /></span>
                 ) : (
                   <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${classDropdownOpen ? "rotate-180" : ""}`} />
                 )}
@@ -155,7 +129,7 @@ export default function DashboardCharts({
                 {classDropdownOpen && (<>
                   <div className="fixed inset-0 z-30" onClick={() => setClassDropdownOpen(false)} />
                   <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-full mt-1.5 z-40 bg-white rounded-xl border border-slate-100 shadow-xl overflow-hidden min-w-[220px]">
+                    className={`absolute right-0 top-full mt-1.5 z-40 rounded-xl border shadow-xl overflow-hidden min-w-[220px] ${dk ? "bg-[#1E293B] border-[#334155]" : "bg-white border-slate-100"}`}>
                     <div className="p-2 border-b border-slate-100">
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -187,8 +161,6 @@ export default function DashboardCharts({
               </AnimatePresence>
             </div>
           </div>
-
-          {/* Presets + date pickers */}
           <div className="flex items-center gap-2 flex-wrap mb-4">
             <div className="flex items-center gap-2 flex-wrap">
               {["This Week", "Last Week", "This Month", "Last Month"].map(p => (
@@ -206,9 +178,7 @@ export default function DashboardCharts({
               <DatePicker value={chartTo} onChange={v => { setChartTo(v); setChartPreset(null); }} label="To" />
             </div>
           </div>
-
-          {/* Chart */}
-          <div className="flex-1 min-h-[192px] [&_svg]:outline-none [&_svg]:focus\:outline-none [&_.recharts-wrapper]:outline-none">
+          <div className="flex-1 min-h-[192px] [&_svg]:outline-none [&_.recharts-wrapper]:outline-none">
             {chartLoading ? (
               <div className="h-full flex items-center justify-center text-slate-400 text-sm">Loading...</div>
             ) : chartData.length > 0 ? (
@@ -220,13 +190,13 @@ export default function DashboardCharts({
                       <stop offset="100%" stopColor="#4F46E5" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" strokeOpacity={0.5} />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748B", fontWeight: "500" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#64748B", fontWeight: "500" }} axisLine={false} tickLine={false} width={32} allowDecimals={false} />
-                  <Tooltip content={<ChartTooltip />} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={grid} strokeOpacity={0.5} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: tick, fontWeight: "500" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: tick, fontWeight: "500" }} axisLine={false} tickLine={false} width={32} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip dark={dk} />} />
                   <Area type="monotone" dataKey="count" stroke="#4F46E5" strokeWidth={3} fill="url(#attendGrad)"
-                    dot={{ r: 5, fill: "#4F46E5", strokeWidth: 3, stroke: "#ffffff" }}
-                    activeDot={{ r: 7, stroke: "#4F46E5", strokeWidth: 3, fill: "#ffffff" }} />
+                    dot={{ r: 5, fill: "#4F46E5", strokeWidth: 3, stroke: dotBg }}
+                    activeDot={{ r: 7, stroke: "#4F46E5", strokeWidth: 3, fill: dotBg }} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -236,30 +206,19 @@ export default function DashboardCharts({
         </div>
       </motion.div>
 
-      {/* ── Class Overview (Vendora-style card) ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="bg-gradient-to-br from-white via-white to-violet-50/30 rounded-2xl shadow-lg border border-slate-100/50 p-6 relative overflow-hidden"
-      >
+      {/* Class Overview */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+        className={`rounded-2xl shadow-lg border p-6 relative overflow-hidden ${dk ? "bg-[#151E2F] border-[#1E293B]" : "bg-gradient-to-br from-white via-white to-violet-50/30 border-slate-100/50"}`}>
         <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-violet-100/20 to-transparent rounded-full -translate-y-12 translate-x-12" />
-
         <div className="relative space-y-6">
-          {/* Bar Chart: Students per Class */}
           <div>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-white">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">Class Overview</h3>
-                <p className="text-xs text-slate-500">Students per class</p>
-              </div>
+              <div><h3 className="text-lg font-bold text-slate-800">Class Overview</h3><p className="text-xs text-slate-500">Students per class</p></div>
             </div>
-            {loading ? (
+            {chartSummaryLoading ? (
               <div className="h-48 flex items-center justify-center text-slate-400 text-sm">Loading...</div>
             ) : barData.length > 0 ? (
               <div className="h-48 [&_svg]:outline-none [&_.recharts-wrapper]:outline-none">
@@ -271,10 +230,10 @@ export default function DashboardCharts({
                         <stop offset="100%" stopColor="#4F46E5" stopOpacity={0.8} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" strokeOpacity={0.5} vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748B", fontWeight: "500" }} axisLine={false} tickLine={false} interval={0} angle={-20} textAnchor="end" height={40} />
-                    <YAxis tick={{ fontSize: 10, fill: "#64748B", fontWeight: "500" }} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
-                    <Tooltip content={<BarTooltip />} cursor={{ fill: "rgba(139, 92, 246, 0.06)" }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={grid} strokeOpacity={0.5} vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: tick, fontWeight: "500" }} axisLine={false} tickLine={false} interval={0} angle={-20} textAnchor="end" height={40} />
+                    <YAxis tick={{ fontSize: 10, fill: tick, fontWeight: "500" }} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
+                    <Tooltip content={<BarTooltip dark={dk} />} cursor={{ fill: dk ? "rgba(139,92,246,0.1)" : "rgba(139,92,246,0.06)" }} />
                     <Bar dataKey="students" fill="url(#barGrad)" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -283,23 +242,15 @@ export default function DashboardCharts({
               <div className="h-48 flex items-center justify-center text-slate-400 text-sm">No classes yet</div>
             )}
           </div>
-
-          <div className="border-t border-slate-100" />
-
-          {/* Donut: Grade Distribution */}
+          <div className={`border-t ${dk ? "border-[#1E293B]" : "border-slate-100"}`} />
           <div>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-white">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
-                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" /></svg>
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">Grade Distribution</h3>
-                <p className="text-xs text-slate-500">Students across grades</p>
-              </div>
+              <div><h3 className="text-lg font-bold text-slate-800">Grade Distribution</h3><p className="text-xs text-slate-500">Students across grades</p></div>
             </div>
-            {loading ? (
+            {chartSummaryLoading ? (
               <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Loading...</div>
             ) : gradeData.length > 0 ? (
               <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -316,11 +267,11 @@ export default function DashboardCharts({
                       </defs>
                       <Pie data={gradeData} cx="50%" cy="50%" innerRadius={42} outerRadius={68} paddingAngle={3} dataKey="count">
                         {gradeData.map((_, i) => (
-                          <Cell key={i} fill={`url(#gradeGrad-${i})`} stroke="white" strokeWidth={3} />
+                          <Cell key={i} fill={`url(#gradeGrad-${i})`} stroke={dotBg} strokeWidth={3} />
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{ backgroundColor: "rgba(255,255,255,0.95)", border: "none", borderRadius: "16px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", fontSize: "14px", fontWeight: "600" }}
+                        contentStyle={{ backgroundColor: dk ? "rgba(30,41,59,0.95)" : "rgba(255,255,255,0.95)", border: "none", borderRadius: "16px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", fontSize: "14px", fontWeight: "600", color: dk ? "#E2E8F0" : "#1E293B" }}
                         formatter={(value: any, _: any, props: any) => [`${value} students`, props.payload.grade]}
                       />
                     </PieChart>
@@ -334,7 +285,7 @@ export default function DashboardCharts({
                 </div>
                 <div className="w-full sm:flex-1 grid grid-cols-2 gap-1.5">
                   {gradeData.map((item, i) => (
-                    <div key={item.grade} className="flex items-center gap-2 p-2 bg-white/60 rounded-lg backdrop-blur-sm">
+                    <div key={item.grade} className={`flex items-center gap-2 p-2 rounded-lg backdrop-blur-sm ${dk ? "bg-white/5" : "bg-white/60"}`}>
                       <div className="w-2.5 h-2.5 rounded-full shadow-sm flex-shrink-0"
                         style={{ background: `linear-gradient(135deg, ${GRADE_COLORS[i % GRADE_COLORS.length].start}, ${GRADE_COLORS[i % GRADE_COLORS.length].end})` }} />
                       <div className="min-w-0">

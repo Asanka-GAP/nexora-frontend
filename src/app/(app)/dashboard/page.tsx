@@ -6,9 +6,10 @@ import { Users, BookOpen, CheckCircle, ScanLine, Calendar as CalendarIcon, Clock
 import { useAuth } from "@/lib/auth";
 import Button from "@/components/ui/Button";
 import { useFetch } from "@/hooks/useFetch";
-import { getStudents, getClasses, getSchedules, getDashboard, getAttendance, getAcademicYearConfig } from "@/services/api";
+import { getStudents, getClasses, getSchedules, getDashboard, getAttendance, getAcademicYearConfig, getDashboardChartSummary } from "@/services/api";
 import DashboardCharts from "@/components/shared/DashboardCharts";
 import PageSkeleton from "@/components/ui/PageSkeleton";
+import { useTheme } from "@/lib/theme";
 
 const toStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const monday = (d: Date) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); return r; };
@@ -16,20 +17,29 @@ const sunday = (m: Date) => { const r = new Date(m); r.setDate(r.getDate() + 6);
 const startOfWeek = (d: Date) => { const r = new Date(d); r.setDate(r.getDate() - r.getDay()); return r; };
 
 const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const SCHEDULE_STYLES: Record<string, { card: string; badge: string; gradient: string }> = {
+const SCHEDULE_STYLES = (dark: boolean): Record<string, { card: string; badge: string; gradient: string }> => ({
   UPCOMING: {
-    card: "bg-gradient-to-br from-indigo-50 via-blue-50 to-violet-50 border-indigo-200/60 hover:border-indigo-300 hover:shadow-indigo-100",
-    badge: "bg-indigo-100 text-indigo-700", gradient: "from-indigo-500 to-blue-500",
+    card: dark
+      ? "bg-[#1a2744] border-indigo-500/30 hover:border-indigo-400/50 hover:bg-[#1e2d50] shadow-md"
+      : "bg-gradient-to-br from-indigo-50 via-blue-50 to-violet-50 border-indigo-200/60 hover:border-indigo-300 hover:shadow-indigo-100",
+    badge: dark ? "bg-indigo-500/25 text-indigo-300" : "bg-indigo-100 text-indigo-700",
+    gradient: "from-indigo-500 to-blue-500",
   },
   COMPLETED: {
-    card: "bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border-emerald-200/60 hover:border-emerald-300 hover:shadow-emerald-100",
-    badge: "bg-emerald-100 text-emerald-700", gradient: "from-emerald-500 to-teal-500",
+    card: dark
+      ? "bg-[#132a1f] border-emerald-500/30 hover:border-emerald-400/50 hover:bg-[#173325] shadow-md"
+      : "bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border-emerald-200/60 hover:border-emerald-300 hover:shadow-emerald-100",
+    badge: dark ? "bg-emerald-500/25 text-emerald-300" : "bg-emerald-100 text-emerald-700",
+    gradient: "from-emerald-500 to-teal-500",
   },
   CANCELLED: {
-    card: "bg-gradient-to-br from-red-50 via-rose-50 to-pink-50 border-red-200/60 hover:border-red-300 hover:shadow-red-100",
-    badge: "bg-red-100 text-red-700", gradient: "from-red-500 to-rose-500",
+    card: dark
+      ? "bg-[#2a1318] border-red-500/30 hover:border-red-400/50 hover:bg-[#331820] shadow-md"
+      : "bg-gradient-to-br from-red-50 via-rose-50 to-pink-50 border-red-200/60 hover:border-red-300 hover:shadow-red-100",
+    badge: dark ? "bg-red-500/25 text-red-300" : "bg-red-100 text-red-700",
+    gradient: "from-red-500 to-rose-500",
   },
-};
+});
 
 const formatTime12 = (t: string) => {
   const [h, m] = t.split(":").map(Number);
@@ -41,10 +51,13 @@ const formatTime12 = (t: string) => {
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { data: students, loading: sLoading, refetch: refetchStudents } = useFetch(useCallback(() => getStudents(), []));
-  const { data: classes, loading: cLoading, refetch: refetchClasses } = useFetch(useCallback(() => getClasses(), []));
-  const { data: dashboard, loading: dLoading, refetch: refetchDashboard } = useFetch(useCallback(() => getDashboard(), []));
-  const { data: academicConfig } = useFetch(useCallback(() => getAcademicYearConfig(), []));
+  const { theme } = useTheme();
+  const dk = theme === "dark";
+  const { data: students, loading: sLoading, refetch: refetchStudents } = useFetch(useCallback(() => getStudents(), []), "dashboard:students");
+  const { data: classes, loading: cLoading, refetch: refetchClasses } = useFetch(useCallback(() => getClasses(), []), "dashboard:classes");
+  const { data: dashboard, loading: dLoading, refetch: refetchDashboard } = useFetch(useCallback(() => getDashboard(), []), "dashboard:main");
+  const { data: academicConfig } = useFetch(useCallback(() => getAcademicYearConfig(), []), "dashboard:academic");
+  const { data: chartSummary, loading: chartSummaryLoading } = useFetch(useCallback(() => getDashboardChartSummary(), []), "dashboard:chartSummary");
 
   // Refetch all data when page becomes visible (e.g. navigating back from classes/students page)
   useEffect(() => {
@@ -58,7 +71,7 @@ export default function DashboardPage() {
 
   const { data: upcomingSessions } = useFetch(useCallback(() => {
     return getSchedules({ from: toStr(weekStart), to: toStr(weekEnd) });
-  }, [weekStart, weekEnd]));
+  }, [weekStart, weekEnd]), "dashboard:sessions");
 
   const loading = sLoading || cLoading || dLoading;
   const allSessions = upcomingSessions ?? [];
@@ -96,14 +109,14 @@ export default function DashboardPage() {
         {/* Next Grade Upgrade Banner */}
         {academicConfig?.nextUpgradeDate && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-            className="relative bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 rounded-2xl border border-amber-200/60 p-4 flex items-center gap-4 overflow-hidden">
+            className={`relative rounded-2xl border p-4 flex items-center gap-4 overflow-hidden ${dk ? "bg-[#2a1f0f] border-amber-500/25" : "bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border-amber-200/60"}`}>
             <div className="absolute right-0 top-0 w-32 h-32 bg-gradient-to-bl from-amber-200/20 to-transparent rounded-full -translate-y-8 translate-x-8" />
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md flex-shrink-0">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0 relative">
-              <p className="text-[10px] font-bold text-amber-600/70 uppercase tracking-widest">Next Grade Upgrade</p>
-              <p className="text-sm font-bold text-slate-800 mt-0.5">
+              <p className={`text-[10px] font-bold uppercase tracking-widest ${dk ? "text-amber-400/70" : "text-amber-600/70"}`}>Next Grade Upgrade</p>
+              <p className={`text-sm font-bold mt-0.5 ${dk ? "text-amber-100" : "text-slate-800"}`}>
                 {new Date(academicConfig.nextUpgradeDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "long", day: "numeric" })}
               </p>
             </div>
@@ -111,9 +124,9 @@ export default function DashboardPage() {
               {(() => {
                 const days = Math.ceil((new Date(academicConfig.nextUpgradeDate + "T00:00:00").getTime() - new Date().setHours(0,0,0,0)) / 86400000);
                 return (
-                  <div className="text-center px-3 py-1.5 rounded-xl bg-white/70 border border-amber-200/50">
-                    <p className="text-lg font-bold text-amber-600 leading-tight">{days <= 0 ? "Due" : days}</p>
-                    <p className="text-[9px] font-semibold text-amber-500/70">{days <= 0 ? "now" : days === 1 ? "day left" : "days left"}</p>
+                  <div className={`text-center px-3 py-1.5 rounded-xl border ${dk ? "bg-amber-500/10 border-amber-500/20" : "bg-white/70 border-amber-200/50"}`}>
+                    <p className={`text-lg font-bold leading-tight ${dk ? "text-amber-400" : "text-amber-600"}`}>{days <= 0 ? "Due" : days}</p>
+                    <p className={`text-[9px] font-semibold ${dk ? "text-amber-400/60" : "text-amber-500/70"}`}>{days <= 0 ? "now" : days === 1 ? "day left" : "days left"}</p>
                   </div>
                 );
               })()}
@@ -177,9 +190,10 @@ export default function DashboardPage() {
         {/* ROW 1: Charts (Vendora customer-analytics style) */}
         <DashboardCharts
           classes={classes}
-          students={students}
+          chartSummary={chartSummary}
           chartRecords={chartRecords}
           chartLoading={chartLoading}
+          chartSummaryLoading={chartSummaryLoading}
           chartFrom={chartFrom}
           chartTo={chartTo}
           chartClass={chartClass}
@@ -188,14 +202,13 @@ export default function DashboardPage() {
           setChartTo={setChartTo}
           setChartClass={setChartClass}
           setChartPreset={setChartPreset}
-          loading={loading}
         />
 
         {/* ROW 2: Class Overview + Weekly Schedule */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" style={{ gridTemplateRows: "auto" }}>
           {/* Left: Today's Scans */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-            className="bg-gradient-to-br from-white via-white to-emerald-50/30 rounded-2xl shadow-lg border border-slate-100/50 p-6 relative lg:overflow-hidden flex flex-col">
+            className={`rounded-2xl shadow-lg border p-6 relative lg:overflow-hidden flex flex-col ${dk ? "bg-[#151E2F] border-[#1E293B]" : "bg-gradient-to-br from-white via-white to-emerald-50/30 border-slate-100/50"}`}>
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-emerald-100/20 to-transparent rounded-full -translate-y-12 translate-x-12" />
             <div className="relative flex flex-col flex-1 min-h-0">
               <div className="flex items-center gap-3 mb-4 flex-shrink-0">
@@ -208,9 +221,9 @@ export default function DashboardPage() {
                 </div>
               </div>
               {(dashboard?.todayCount ?? 0) > 0 && (
-                <div className="flex items-center gap-2 mb-4 p-3 bg-emerald-50/60 rounded-xl border border-emerald-100/50 flex-shrink-0">
-                  <span className="text-2xl font-bold text-emerald-700">{dashboard?.todayCount}</span>
-                  <span className="text-xs text-emerald-600/70">students scanned</span>
+                <div className={`flex items-center gap-2 mb-4 p-3 rounded-xl border flex-shrink-0 ${dk ? "bg-emerald-500/10 border-emerald-500/20" : "bg-emerald-50/60 border-emerald-100/50"}`}>
+                  <span className={`text-2xl font-bold ${dk ? "text-emerald-400" : "text-emerald-700"}`}>{dashboard?.todayCount}</span>
+                  <span className={`text-xs ${dk ? "text-emerald-400/70" : "text-emerald-600/70"}`}>students scanned</span>
                 </div>
               )}
               <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
@@ -225,7 +238,7 @@ export default function DashboardPage() {
                 ) : (
                   dashboard.recentToday.slice(0, 5).map((r, i) => (
                     <motion.div key={r.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.05 }}
-                      className="bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-white/50 hover:shadow-md transition-all duration-300 flex items-center gap-3">
+                      className={`backdrop-blur-sm rounded-xl p-3 border hover:shadow-md transition-all duration-300 flex items-center gap-3 ${dk ? "bg-white/5 border-white/10" : "bg-white/60 border-white/50"}`}>
                       <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0 shadow-sm">
                         <span className="text-[11px] font-bold text-white">{r.studentName?.charAt(0)?.toUpperCase()}</span>
                       </div>
@@ -250,7 +263,7 @@ export default function DashboardPage() {
 
           {/* Right: Weekly Schedule */}
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-            className="lg:col-span-2 bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 overflow-hidden flex flex-col">
+            className={`lg:col-span-2 rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border overflow-hidden flex flex-col ${dk ? "bg-[#151E2F] border-[#1E293B]" : "bg-white border-slate-100"}`}>
           {/* Header */}
           <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-4 flex items-center justify-between">
             <div>
@@ -270,7 +283,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Mobile: stacked list view */}
-          <div className="md:hidden divide-y divide-slate-100">
+          <div className={`md:hidden ${dk ? "divide-[#1E293B]" : "divide-slate-100"} divide-y`}>
             {weekDays.map((d, idx) => {
               const ds = toStr(d);
               const isToday = ds === todayStr;
@@ -278,10 +291,10 @@ export default function DashboardPage() {
               const dayEvents = eventsByDate[ds] ?? [];
               if (isPast && dayEvents.length === 0) return null;
               return (
-                <div key={ds} className={`px-4 py-3 ${isToday ? "bg-indigo-50/40" : ""}`}>
+                <div key={ds} className={`px-4 py-3 ${isToday ? (dk ? "bg-indigo-500/5" : "bg-indigo-50/40") : ""}`}>
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${
-                      isToday ? "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-md shadow-indigo-300/40" : "bg-slate-50 border border-slate-200"
+                      isToday ? "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-md shadow-indigo-300/40" : (dk ? "bg-[#1E293B] border border-[#334155]" : "bg-slate-50 border border-slate-200")
                     }`}>
                       <span className={`text-[9px] font-bold uppercase leading-none ${isToday ? "text-white/80" : "text-slate-400"}`}>{DAYS_SHORT[d.getDay()]}</span>
                       <span className={`text-sm font-bold leading-tight ${isToday ? "text-white" : isPast ? "text-slate-300" : "text-slate-700"}`}>{d.getDate()}</span>
@@ -296,7 +309,7 @@ export default function DashboardPage() {
                   {dayEvents.length > 0 && (
                     <div className="flex flex-col gap-2 ml-[52px]">
                       {dayEvents.map((ev) => {
-                        const st = SCHEDULE_STYLES[ev.status] ?? SCHEDULE_STYLES.UPCOMING;
+                        const st = SCHEDULE_STYLES(dk)[ev.status] ?? SCHEDULE_STYLES(dk).UPCOMING;
                         return (
                           <div key={ev.id} className={`rounded-xl border p-3 ${st.card}`}>
                             <div className="flex items-start justify-between gap-2">
@@ -305,13 +318,13 @@ export default function DashboardPage() {
                             </div>
                             <div className="flex items-center gap-3 mt-1.5">
                               <div className="flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-gray-400" />
-                                <span className="text-[11px] text-gray-500 font-medium">{formatTime12(ev.startTime)} – {formatTime12(ev.endTime)}</span>
+                                <Clock className={`w-3 h-3 ${dk ? "text-slate-500" : "text-gray-400"}`} />
+                                <span className={`text-[11px] font-medium ${dk ? "text-slate-400" : "text-gray-500"}`}>{formatTime12(ev.startTime)} – {formatTime12(ev.endTime)}</span>
                               </div>
                               {ev.location && (
                                 <div className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3 text-gray-400" />
-                                  <span className="text-[11px] text-gray-500 truncate">{ev.location}</span>
+                                  <MapPin className={`w-3 h-3 ${dk ? "text-slate-500" : "text-gray-400"}`} />
+                                  <span className={`text-[11px] truncate ${dk ? "text-slate-400" : "text-gray-500"}`}>{ev.location}</span>
                                 </div>
                               )}
                             </div>
@@ -328,13 +341,13 @@ export default function DashboardPage() {
           {/* Desktop: 7-column grid view */}
           <div className="hidden md:flex md:flex-col flex-1">
             {/* Day header row */}
-            <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/50">
+            <div className={`grid grid-cols-7 border-b ${dk ? "border-[#1E293B] bg-[#0F172A]/50" : "border-slate-100 bg-slate-50/50"}`}>
               {weekDays.map((d) => {
                 const ds = toStr(d);
                 const isToday = ds === todayStr;
                 const isPast = ds < todayStr;
                 return (
-                  <div key={ds} className={`flex flex-col items-center py-3 border-r border-slate-100/40 last:border-r-0 transition-colors ${isToday ? "bg-indigo-50/60" : ""}`}>
+                  <div key={ds} className={`flex flex-col items-center py-3 border-r last:border-r-0 transition-colors ${dk ? "border-[#1E293B]/40" : "border-slate-100/40"} ${isToday ? (dk ? "bg-indigo-500/5" : "bg-indigo-50/60") : ""}`}>
                     <span className={`text-[10px] font-bold uppercase tracking-widest ${isToday ? "text-indigo-500" : isPast ? "text-slate-300" : "text-slate-400"}`}>
                       {DAYS_SHORT[d.getDay()]}
                     </span>
@@ -364,8 +377,8 @@ export default function DashboardPage() {
                 const isPast = ds < todayStr;
                 const dayEvents = eventsByDate[ds] ?? [];
                 return (
-                  <div key={ds} className={`border-r border-slate-100/40 last:border-r-0 ${veryCompact ? "p-0.5" : compact ? "p-1" : "p-1.5"} flex flex-col ${veryCompact ? "gap-0.5" : compact ? "gap-1" : "gap-1.5"} ${
-                    isToday ? "bg-indigo-50/30" : isPast ? "bg-gray-50/30" : ""
+                  <div key={ds} className={`border-r last:border-r-0 ${dk ? "border-[#1E293B]/40" : "border-slate-100/40"} ${veryCompact ? "p-0.5" : compact ? "p-1" : "p-1.5"} flex flex-col ${veryCompact ? "gap-0.5" : compact ? "gap-1" : "gap-1.5"} ${
+                    isToday ? (dk ? "bg-indigo-500/5" : "bg-indigo-50/30") : isPast ? (dk ? "bg-white/[0.01]" : "bg-gray-50/30") : ""
                   }`}>
                     {dayEvents.length === 0 ? (
                       <div className="flex-1 flex flex-col items-center justify-center opacity-20 py-6">
@@ -374,7 +387,7 @@ export default function DashboardPage() {
                       </div>
                     ) : (
                       dayEvents.map((ev, evIdx) => {
-                        const st = SCHEDULE_STYLES[ev.status] ?? SCHEDULE_STYLES.UPCOMING;
+                        const st = SCHEDULE_STYLES(dk)[ev.status] ?? SCHEDULE_STYLES(dk).UPCOMING;
                         return (
                           <motion.div
                             key={ev.id}
@@ -384,17 +397,17 @@ export default function DashboardPage() {
                             className={`w-full text-left rounded-lg border ${veryCompact ? "p-1" : compact ? "p-1.5" : "p-2"} transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 group cursor-default ${st.card}`}
                           >
                             {!veryCompact && <div className={`h-0.5 w-6 rounded-full bg-gradient-to-r ${st.gradient} ${compact ? "mb-0.5" : "mb-1.5"} group-hover:w-10 transition-all duration-300`} />}
-                            <p className={`${veryCompact ? "text-[8px]" : "text-[10px]"} font-bold truncate leading-tight text-gray-800`}>{ev.className}</p>
+                            <p className={`${veryCompact ? "text-[8px]" : "text-[10px]"} font-bold truncate leading-tight ${dk ? "text-slate-200" : "text-gray-800"}`}>{ev.className}</p>
                             <div className={`flex items-center gap-1 ${veryCompact ? "mt-0" : "mt-1"}`}>
-                              <Clock className={`${veryCompact ? "w-2 h-2" : "w-2.5 h-2.5"} text-gray-400 flex-shrink-0`} />
-                              <p className={`${veryCompact ? "text-[7px]" : "text-[9px]"} text-gray-500 font-medium truncate`}>
+                              <Clock className={`${veryCompact ? "w-2 h-2" : "w-2.5 h-2.5"} ${dk ? "text-slate-500" : "text-gray-400"} flex-shrink-0`} />
+                              <p className={`${veryCompact ? "text-[7px]" : "text-[9px]"} ${dk ? "text-slate-400" : "text-gray-500"} font-medium truncate`}>
                                 {formatTime12(ev.startTime)} – {formatTime12(ev.endTime)}
                               </p>
                             </div>
                             {!veryCompact && ev.location && (
                               <div className="flex items-center gap-1 mt-0.5">
-                                <MapPin className="w-2.5 h-2.5 text-gray-400 flex-shrink-0" />
-                                <p className="text-[9px] text-gray-500 truncate">{ev.location}</p>
+                                <MapPin className={`w-2.5 h-2.5 ${dk ? "text-slate-500" : "text-gray-400"} flex-shrink-0`} />
+                                <p className={`text-[9px] ${dk ? "text-slate-400" : "text-gray-500"} truncate`}>{ev.location}</p>
                               </div>
                             )}
                             {!compact && ev.grade && (
@@ -414,16 +427,16 @@ export default function DashboardPage() {
             })()}
 
             {/* Footer summary row */}
-            <div className="grid grid-cols-7 border-t border-slate-100 bg-slate-50/50">
+            <div className={`grid grid-cols-7 border-t ${dk ? "border-[#1E293B] bg-[#0F172A]/50" : "border-slate-100 bg-slate-50/50"}`}>
               {weekDays.map((d) => {
                 const ds = toStr(d);
                 const isToday = ds === todayStr;
                 const count = (eventsByDate[ds] ?? []).length;
                 return (
-                  <div key={`f-${ds}`} className="text-center py-1.5 border-r border-slate-100/40 last:border-r-0">
+                  <div key={`f-${ds}`} className={`text-center py-1.5 border-r last:border-r-0 ${dk ? "border-[#1E293B]/40" : "border-slate-100/40"}`}>
                     {count > 0 ? (
                       <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                        isToday ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"
+                        isToday ? (dk ? "bg-indigo-500/20 text-indigo-400" : "bg-indigo-100 text-indigo-600") : (dk ? "bg-white/5 text-slate-500" : "bg-gray-100 text-gray-400")
                       }`}>
                         {count} class{count !== 1 ? "es" : ""}
                       </span>

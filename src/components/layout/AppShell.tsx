@@ -19,7 +19,7 @@ export default function AppShell({ title, children }: AppShellProps) {
         <main className="flex-1 p-6 lg:p-8 pt-20 lg:pt-6 pb-4 overflow-y-auto overflow-x-hidden">
           {children}
         </main>
-        <footer className="px-8 py-3 flex items-center justify-between text-xs text-slate-400 bg-white flex-shrink-0" style={{ borderTop: "1px solid #f1f5f9", boxShadow: "0 -4px 12px rgba(0,0,0,0.06)" }}>
+        <footer className="px-8 py-3 flex items-center justify-between text-xs text-text-muted bg-bg-card flex-shrink-0 border-t border-border">
           <span>© {new Date().getFullYear()} <span className="font-semibold" style={{ color: "#4F46E5" }}>Nexora</span>. All rights reserved.</span>
           <span className="hidden sm:block">Smart Student Attendance System 📚</span>
         </footer>

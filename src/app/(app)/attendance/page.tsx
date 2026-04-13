@@ -5,6 +5,7 @@ import { ScanLine, CheckCircle, Calendar, Users, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import Button from "@/components/ui/Button";
+import DatePicker from "@/components/shared/DatePicker";
 import { useFetch } from "@/hooks/useFetch";
 import { getAttendance, getTodayAttendanceCount, getClasses } from "@/services/api";
 import type { AttendanceRecord, ClassItem } from "@/lib/types";
@@ -177,8 +178,8 @@ export default function AttendancePage() {
                   <div className="p-4 space-y-3">
                     <p className="text-xs font-bold text-text-muted uppercase tracking-widest px-1">Custom Range</p>
                     <div className="grid grid-cols-2 gap-3">
-                      <div><label className="text-xs font-semibold text-text-muted mb-1.5 block">From</label><input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-border text-sm text-text bg-bg focus:outline-none focus:ring-2 focus:ring-primary/20" /></div>
-                      <div><label className="text-xs font-semibold text-text-muted mb-1.5 block">To</label><input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-border text-sm text-text bg-bg focus:outline-none focus:ring-2 focus:ring-primary/20" /></div>
+                      <div><label className="text-xs font-semibold text-text-muted mb-1.5 block">From</label><DatePicker value={dateFrom} onChange={v => setDateFrom(v)} fullWidth /></div>
+                      <div><label className="text-xs font-semibold text-text-muted mb-1.5 block">To</label><DatePicker value={dateTo} onChange={v => setDateTo(v)} minDate={dateFrom} fullWidth /></div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 p-4 border-t border-border bg-bg/40">

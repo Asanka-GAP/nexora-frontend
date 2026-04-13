@@ -15,6 +15,8 @@ export interface Student {
   createdAt: string;
   contacts: StudentContact[];
   enrolledClasses: EnrolledClass[];
+  attendanceCount: number;
+  presentCount: number;
 }
 
 export interface EnrolledClass {
@@ -56,11 +58,15 @@ export interface ClassItem {
   createdAt: string;
   schedules: ClassScheduleItem[];
   studentCount: number;
+  completedSessions: number;
+  cancelledSessions: number;
 }
 
 export interface ClassScheduleItem {
   id: string;
+  scheduleType: string;
   dayOfWeek: number;
+  sessionDate?: string;
   startTime: string;
   endTime: string;
 }

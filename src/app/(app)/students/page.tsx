@@ -1,7 +1,7 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Users, UserPlus, Phone, QrCode, Download, Printer, GraduationCap, MapPin, BookOpen, User, Search, X, ChevronDown, UserCheck, UserX, Layers } from "lucide-react";
+import { Plus, Trash2, Pencil, Users, UserPlus, Phone, QrCode, Download, Printer, GraduationCap, MapPin, BookOpen, User, Search, X, ChevronDown, UserCheck, UserX, Layers, CalendarCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { toPng } from "html-to-image";
@@ -12,6 +12,8 @@ import { useFetch } from "@/hooks/useFetch";
 import { getStudents, getClasses, createStudent, updateStudent, deleteStudentApi, toggleStudentStatus, addStudentContact, deleteStudentContact } from "@/services/api";
 import type { Student, ClassItem } from "@/lib/types";
 import PageSkeleton from "@/components/ui/PageSkeleton";
+import AttendanceDrawer from "@/components/students/AttendanceDrawer";
+import { invalidateCache } from "@/lib/cache";
 
 interface ParentRow { contactName: string; phone: string; relationship: string; isPrimary: boolean; }
 const emptyForm = { fullName: "", currentGrade: 1, address: "" };
@@ -23,10 +25,12 @@ type StatusFilter = "ALL" | "ACTIVE" | "INACTIVE";
 export default function StudentsPage() {
   const { user } = useAuth();
   const cardRef = useRef<HTMLDivElement>(null);
+  const previewWrapRef = useRef<HTMLDivElement>(null);
   const fetchStudents = useCallback(() => getStudents(), []);
-  const { data: students, setData: setStudents, loading, refetch } = useFetch(fetchStudents);
+  const { data: students, setData: setStudents, loading, refetch: _refetchStudents } = useFetch(fetchStudents, "students:all");
+  const refetch = useCallback(() => { invalidateCache("students"); invalidateCache("dashboard"); _refetchStudents(); }, [_refetchStudents]);
   const fetchClasses = useCallback(() => getClasses(), []);
-  const { data: classes } = useFetch(fetchClasses);
+  const { data: classes } = useFetch(fetchClasses, "classes:all");
   const [search, setSearch] = useState("");
   const [filterGrade, setFilterGrade] = useState<number | "ALL">("ALL");
   const [filterStatus, setFilterStatus] = useState<StatusFilter>("ALL");
@@ -53,14 +57,35 @@ export default function StudentsPage() {
 
   // QR Code
   const [qrStudent, setQrStudent] = useState<Student | null>(null);
+  // Attendance History
+  const [attendanceStudent, setAttendanceStudent] = useState<Student | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState("");
+  const [qrLoading, setQrLoading] = useState(false);
 
   useEffect(() => {
     if (qrStudent) {
+      setQrLoading(true);
       QRCode.toDataURL(qrStudent.studentCode, { width: 200, margin: 1, color: { dark: "#111827", light: "#ffffff" } })
-        .then(setQrDataUrl).catch(() => setQrDataUrl(""));
-    } else { setQrDataUrl(""); }
+        .then(url => { setQrDataUrl(url); setQrLoading(false); })
+        .catch(() => { setQrDataUrl(""); setQrLoading(false); });
+    } else { setQrDataUrl(""); setQrLoading(false); }
   }, [qrStudent]);
+
+  useEffect(() => {
+    if (!qrStudent) return;
+    const wrap = previewWrapRef.current;
+    if (!wrap) return;
+    const resize = () => {
+      const inner = wrap.firstElementChild as HTMLElement | null;
+      if (!inner) return;
+      const s = Math.min(wrap.offsetWidth / 450, 1);
+      inner.style.transform = `scale(${s})`;
+      wrap.style.height = `${284 * s}px`;
+    };
+    const t = setTimeout(resize, 10);
+    window.addEventListener("resize", resize);
+    return () => { clearTimeout(t); window.removeEventListener("resize", resize); };
+  }, [qrStudent, qrDataUrl]);
 
   const downloadCard = async () => {
     if (!cardRef.current || !qrStudent) return;
@@ -172,10 +197,13 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
         toast.success("Student added");
       }
       setModalOpen(false); setEditingStudent(null);
-      const freshStudents = await getStudents();
       if (!editingStudent) {
-        const newest = freshStudents.find(s => s.fullName === form.fullName);
-        if (newest) setQrStudent(newest);
+        setQrLoading(true);
+        setQrStudent({ id: "", studentCode: "", fullName: form.fullName, currentGrade: Number(form.currentGrade), address: form.address, isActive: true, createdAt: new Date().toISOString(), contacts: [], enrolledClasses: [], attendanceCount: 0, presentCount: 0 } as Student);
+        getStudents().then(freshStudents => {
+          const newest = freshStudents.find(s => s.fullName === form.fullName);
+          if (newest) setQrStudent(newest);
+        });
       }
       refetch();
     } catch { toast.error(editingStudent ? "Failed to update" : "Failed to add student"); }
@@ -230,8 +258,10 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
 
   const activeCount = all.filter(s => s.isActive).length;
   const inactiveCount = all.length - activeCount;
-  const totalContacts = all.reduce((sum, s) => sum + (s.contacts?.length ?? 0), 0);
-  const totalEnrollments = all.reduce((sum, s) => sum + (s.enrolledClasses?.length ?? 0), 0);
+  const totalAttendance = all.reduce((sum, s) => sum + (s.attendanceCount || 0), 0);
+  const totalPresent = all.reduce((sum, s) => sum + (s.presentCount || 0), 0);
+  const avgAttendance = totalAttendance > 0 ? Math.round((totalPresent / totalAttendance) * 100) : 0;
+  const lowAttendanceCount = all.filter(s => { const t = s.attendanceCount || 0; const p = s.presentCount || 0; return t > 0 && Math.round((p / t) * 100) < 75; }).length;
 
   if (loading && !students) return <PageSkeleton />;
 
@@ -247,8 +277,8 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
         {[
           { label: "TOTAL", value: all.length, sub: "All students", gradient: "from-[#4F46E5] to-[#3730A3]", accentColor: "#4F46E5", icon: <Users className="w-5 h-5" /> },
           { label: "ACTIVE", value: activeCount, sub: `${all.length ? Math.round((activeCount / all.length) * 100) : 0}% of total`, gradient: "from-emerald-500 to-emerald-600", accentColor: "#10b981", icon: <UserCheck className="w-5 h-5" /> },
-          { label: "GRADES", value: grades.length, sub: `${grades.length ? `Grade ${grades[0]}–${grades[grades.length - 1]}` : "None"}`, gradient: "from-amber-500 to-orange-500", accentColor: "#f59e0b", icon: <Layers className="w-5 h-5" /> },
-          { label: "ENROLLMENTS", value: totalEnrollments, sub: `${all.length ? (totalEnrollments / all.length).toFixed(1) : 0} avg per student`, gradient: "from-violet-500 to-purple-600", accentColor: "#8b5cf6", icon: <BookOpen className="w-5 h-5" /> },
+          { label: "ATTENDANCE", value: `${avgAttendance}%`, sub: `${totalPresent}/${totalAttendance} total present`, gradient: "from-violet-500 to-purple-600", accentColor: "#8b5cf6", icon: <CalendarCheck className="w-5 h-5" /> },
+          { label: "NEED ATTENTION", value: lowAttendanceCount + inactiveCount, sub: `${inactiveCount} inactive · ${lowAttendanceCount} low attendance`, gradient: "from-amber-500 to-orange-500", accentColor: "#f59e0b", icon: <UserX className="w-5 h-5" /> },
         ].map((card, i) => (
           <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
             className="relative bg-white rounded-2xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] transition-all duration-200 overflow-hidden group">
@@ -312,16 +342,39 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
           {/* Desktop */}
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
-              <thead><tr className="border-b border-border">{["Student", "Code", "Grade", "Classes", "Join Date", "Status", "Action"].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
+              <thead><tr className="border-b border-border">{["Student", "Code", "Grade", "Attendance", "Classes", "Status", "Action"].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
               <tbody>
                 {paginated.map(s => (
                   <tr key={s.id} className="border-b border-border/50 hover:bg-bg/50 transition-colors">
                     <td className="px-5 py-3.5">
                       <p className="text-sm font-medium text-text">{s.fullName}</p>
                       {s.address && <p className="text-xs text-text-muted truncate max-w-[200px]">{s.address}</p>}
+                      <p className="text-[10px] text-slate-400 mt-0.5">Joined {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                     </td>
                     <td className="px-5 py-3.5 text-sm text-text-muted font-mono">{s.studentCode}</td>
-                    <td className="px-5 py-3.5"><span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-secondary/15 text-cyan-800">Grade {s.currentGrade}</span></td>
+                    <td className="px-5 py-3.5"><span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-secondary/15 text-cyan-800">{s.currentGrade}</span></td>
+                    <td className="px-5 py-3.5">
+                      {(() => {
+                        const total = s.attendanceCount || 0;
+                        const present = s.presentCount || 0;
+                        const pct = total > 0 ? Math.round((present / total) * 100) : 0;
+                        const barColor = total === 0 ? "bg-slate-300" : pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+                        const statusColor = total === 0 ? "text-slate-400" : pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600";
+                        const statusLabel = total === 0 ? "No Data" : pct >= 75 ? "Good" : pct >= 50 ? "Low" : "Critical";
+                        return (
+                          <div className="min-w-[100px]">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-semibold text-slate-800">{total > 0 ? `${pct}%` : "—"}</span>
+                              <span className={`text-[10px] font-semibold ${statusColor}`}>{statusLabel}</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${total > 0 ? pct : 0}%` }} />
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{present}/{total} present</p>
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="px-5 py-3.5">
                       {s.enrolledClasses?.length ? (
                         <div className="flex flex-wrap gap-1">
@@ -331,7 +384,6 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                         </div>
                       ) : <span className="text-xs text-text-muted">—</span>}
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-text-muted">{new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <button onClick={() => handleToggle(s)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${s.isActive ? "bg-emerald-500" : "bg-red-500"}`}>
@@ -342,10 +394,11 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => setQrStudent(s)} className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 transition-all" title="QR Code"><QrCode className="w-4 h-4" /></button>
-                        <button onClick={() => setContactStudent(s)} className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 transition-all" title="Contacts"><Phone className="w-4 h-4" /></button>
-                        <button onClick={() => openEdit(s)} className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 transition-all" title="Edit"><Pencil className="w-4 h-4" /></button>
-                        <button onClick={() => setDeleteTarget(s)} className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-all" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => setAttendanceStudent(s)} className="p-1.5 text-text-muted hover:text-primary transition-colors" title="Attendance History"><CalendarCheck className="w-4 h-4" /></button>
+                        <button onClick={() => setQrStudent(s)} className="p-1.5 text-text-muted hover:text-primary transition-colors" title="QR Code"><QrCode className="w-4 h-4" /></button>
+                        <button onClick={() => setContactStudent(s)} className="p-1.5 text-text-muted hover:text-primary transition-colors" title="Contacts"><Phone className="w-4 h-4" /></button>
+                        <button onClick={() => openEdit(s)} className="p-1.5 text-text-muted hover:text-primary transition-colors" title="Edit"><Pencil className="w-4 h-4" /></button>
+                        <button onClick={() => setDeleteTarget(s)} className="p-1.5 text-text-muted hover:text-danger transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -362,7 +415,7 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                   <div className={`w-1 rounded-full flex-shrink-0 ${s.isActive ? "bg-success" : "bg-danger"}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <div><p className="font-semibold text-text text-sm truncate">{s.fullName}</p><p className="text-[10px] text-text-muted font-mono">{s.studentCode}</p></div>
+                      <div><p className="font-semibold text-text text-sm truncate">{s.fullName}</p><p className="text-[10px] text-text-muted font-mono">{s.studentCode}</p><p className="text-[10px] text-slate-400">Joined {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p></div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${s.isActive ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{s.isActive ? "Active" : "Inactive"}</span>
                     </div>
                     <div className="flex items-center justify-between mb-2">
@@ -374,11 +427,31 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                         <span className={`text-xs font-semibold ${s.isActive ? "text-emerald-700" : "text-red-600"}`}>{s.isActive ? "Active" : "Inactive"}</span>
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 mb-2">
-                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Grade</p><p className="text-xs font-medium text-text mt-0.5">{s.currentGrade}</p></div>
-                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Enrolled</p><p className="text-xs font-medium text-text mt-0.5">{new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p></div>
-                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Classes</p><p className="text-xs font-medium text-text mt-0.5">{s.enrolledClasses?.length || 0}</p></div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div className="bg-white rounded-lg px-2.5 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.08)] border border-slate-100"><p className="text-[9px] font-semibold text-text-muted uppercase">Grade</p><p className="text-xs font-medium text-text mt-0.5">{s.currentGrade}</p></div>
+                      <div className="bg-white rounded-lg px-2.5 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.08)] border border-slate-100"><p className="text-[9px] font-semibold text-text-muted uppercase">Classes</p><p className="text-xs font-medium text-text mt-0.5">{s.enrolledClasses?.length || 0}</p></div>
                     </div>
+                    {/* Attendance Health Bar */}
+                    {(() => {
+                      const total = s.attendanceCount || 0;
+                      const present = s.presentCount || 0;
+                      const pct = total > 0 ? Math.round((present / total) * 100) : 0;
+                      const barColor = total === 0 ? "bg-slate-300" : pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+                      const statusColor = total === 0 ? "text-slate-400" : pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600";
+                      const statusLabel = total === 0 ? "No Data" : pct >= 75 ? "Good" : pct >= 50 ? "Low" : "Critical";
+                      return (
+                        <div className="mb-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-text-muted"><span className="font-bold text-text">{total > 0 ? `${pct}%` : "—"}</span> attendance</span>
+                            <span className={`text-[10px] font-semibold ${statusColor}`}>{statusLabel}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${total > 0 ? pct : 0}%` }} />
+                          </div>
+                          <p className="text-[10px] text-text-muted mt-0.5">{present}/{total} present</p>
+                        </div>
+                      );
+                    })()}
                     {s.enrolledClasses?.length > 0 && (
                       <div className="flex flex-wrap gap-1 mb-2">
                         {s.enrolledClasses.map(c => (
@@ -387,6 +460,7 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                       </div>
                     )}
                     <div className="flex items-center gap-2">
+                      <button onClick={() => setAttendanceStudent(s)} className="flex-1 flex items-center justify-center py-2 rounded-lg text-primary bg-primary/10 hover:bg-primary/20 transition-all" title="Attendance"><CalendarCheck className="w-4 h-4" /></button>
                       <button onClick={() => setQrStudent(s)} className="flex-1 flex items-center justify-center py-2 rounded-lg text-primary bg-primary/10 hover:bg-primary/20 transition-all"><QrCode className="w-4 h-4" /></button>
                       <button onClick={() => setContactStudent(s)} className="flex-1 flex items-center justify-center py-2 rounded-lg text-primary bg-primary/10 hover:bg-primary/20 transition-all"><Phone className="w-4 h-4" /></button>
                       <button onClick={() => openEdit(s)} className="flex-1 flex items-center justify-center py-2 rounded-lg text-primary bg-primary/10 hover:bg-primary/20 transition-all"><Pencil className="w-4 h-4" /></button>
@@ -558,7 +632,7 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                 </div>
                 <div className="space-y-3">
                   {parents.map((p, idx) => (
-                    <div key={idx} className="rounded-xl border border-border bg-bg/30 p-3.5 space-y-3">
+                    <div key={idx} className="rounded-xl border border-border bg-bg-card p-3.5 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -580,15 +654,25 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                             className="w-full px-3 py-2 rounded-lg border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <select value={p.relationship} onChange={e => updateParentRow(idx, "relationship", e.target.value)}
-                          className="flex-1 rounded-lg border border-border bg-bg-card px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20">
-                          <option value="Parent">Parent</option><option value="Father">Father</option><option value="Mother">Mother</option><option value="Guardian">Guardian</option><option value="Other">Other</option>
-                        </select>
-                        <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0">
-                          <input type="checkbox" checked={p.isPrimary} onChange={e => updateParentRow(idx, "isPrimary", e.target.checked)} className="rounded border-border text-primary focus:ring-primary/50" />
-                          <span className="text-xs text-text-muted font-medium">Primary</span>
-                        </label>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Relationship</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {["Parent", "Father", "Mother", "Guardian", "Other"].map(r => (
+                              <button key={r} type="button" onClick={() => updateParentRow(idx, "relationship", r)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${p.relationship === r ? "bg-primary text-white shadow-sm" : "bg-bg text-text-muted hover:text-text hover:bg-bg-card border border-border"}`}>
+                                {r}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => updateParentRow(idx, "isPrimary", !p.isPrimary)}
+                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all w-full ${p.isPrimary ? "bg-primary/10 border border-primary/30" : "bg-bg border border-border hover:border-primary/20"}`}>
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${p.isPrimary ? "bg-primary border-primary" : "border-border bg-bg-card"}`}>
+                            {p.isPrimary && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                          </div>
+                          <span className={`text-xs font-semibold ${p.isPrimary ? "text-primary" : "text-text-muted"}`}>Primary Contact</span>
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -627,7 +711,7 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
             {contactStudent?.contacts?.length ? (
               <div className="space-y-2">
                 {contactStudent.contacts.map((c, i) => (
-                  <div key={c.id} className="flex items-center gap-3 rounded-xl border border-border bg-bg/50 px-4 py-3 group hover:border-primary/20 transition-all">
+                  <div key={c.id} className="flex items-center gap-3 rounded-xl border border-border bg-bg-card px-4 py-3 group hover:border-primary/20 transition-all">
                     <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-bold text-primary">{i + 1}</span>
                     </div>
@@ -659,7 +743,7 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
           {/* Add New Contact */}
           <div>
             <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-3">Add New Contact</p>
-            <div className="rounded-xl border border-border bg-bg/30 p-4 space-y-3">
+            <div className="rounded-xl border border-border bg-bg-card p-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-text-muted mb-1.5">Name</label>
@@ -678,23 +762,25 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                   </div>
                 </div>
               </div>
-              <div className="flex items-end gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Relationship</label>
-                  <select value={newContact.relationship} onChange={e => setNewContact({ ...newContact, relationship: e.target.value })}
-                    className="w-full rounded-xl border border-border bg-bg-card px-3 py-2.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-                    <option value="Parent">Parent</option><option value="Father">Father</option><option value="Mother">Mother</option><option value="Guardian">Guardian</option><option value="Other">Other</option>
-                  </select>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Relationship</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["Parent", "Father", "Mother", "Guardian", "Other"].map(r => (
+                      <button key={r} type="button" onClick={() => setNewContact({ ...newContact, relationship: r })}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${newContact.relationship === r ? "bg-primary text-white shadow-sm" : "bg-bg text-text-muted hover:text-text hover:bg-bg-card border border-border"}`}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer pb-2.5 flex-shrink-0">
-                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                    newContact.isPrimary ? "bg-primary border-primary" : "border-border bg-bg-card"
-                  }`}>
+                <button type="button" onClick={() => setNewContact({ ...newContact, isPrimary: !newContact.isPrimary })}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all w-full ${newContact.isPrimary ? "bg-primary/10 border border-primary/30" : "bg-bg border border-border hover:border-primary/20"}`}>
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${newContact.isPrimary ? "bg-primary border-primary" : "border-border bg-bg-card"}`}>
                     {newContact.isPrimary && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                   </div>
-                  <input type="checkbox" checked={newContact.isPrimary} onChange={e => setNewContact({ ...newContact, isPrimary: e.target.checked })} className="sr-only" />
-                  <span className="text-xs font-medium text-text-muted">Primary</span>
-                </label>
+                  <span className={`text-xs font-semibold ${newContact.isPrimary ? "text-primary" : "text-text-muted"}`}>Primary Contact</span>
+                </button>
               </div>
             </div>
           </div>
@@ -709,11 +795,38 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
 
       {/* Student ID Card Modal */}
       <Modal open={!!qrStudent} onClose={() => setQrStudent(null)} title="Student ID Card">
-        {qrStudent && (
+        {qrStudent && qrLoading && (
+          <div className="flex flex-col items-center gap-4 py-8">
+            <div className="w-full max-w-[450px] mx-auto rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="h-12 bg-gradient-to-r from-indigo-600 to-indigo-800 animate-pulse" />
+              <div className="p-5 space-y-4">
+                <div className="flex gap-4">
+                  <div className="flex-1 space-y-3">
+                    <div className="h-3 bg-slate-200 rounded w-20 animate-pulse" />
+                    <div className="h-5 bg-slate-200 rounded w-40 animate-pulse" />
+                    <div className="h-px bg-slate-100 my-2" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="h-8 bg-slate-100 rounded animate-pulse" />
+                      <div className="h-8 bg-slate-100 rounded animate-pulse" />
+                      <div className="h-8 bg-slate-100 rounded animate-pulse" />
+                      <div className="h-8 bg-slate-100 rounded animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="w-[135px] h-[135px] bg-slate-100 rounded-xl animate-pulse flex-shrink-0" />
+                </div>
+              </div>
+              <div className="h-8 bg-slate-50 border-t border-slate-100" />
+            </div>
+            <p className="text-xs text-slate-400 animate-pulse">Generating ID card...</p>
+          </div>
+        )}
+        {qrStudent && !qrLoading && (
           <div className="flex flex-col items-center gap-4">
             {/* ID Card — CR80 card size ratio (85.6mm × 54mm = 1.586:1) */}
-            <div ref={cardRef} style={{ width: 450, height: 284, fontFamily: "'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "-0.01em" }}
-              className="bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-200 flex flex-col">
+            {/* Hidden full-size card for download/print */}
+            <div className="fixed -left-[9999px] -top-[9999px]">
+              <div ref={cardRef} style={{ width: 450, height: 284, fontFamily: "'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "-0.01em" }}
+                className="id-card-preview bg-white overflow-hidden flex flex-col">
               {/* Card header */}
               <div style={{ background: "linear-gradient(135deg, #4F46E5, #3730A3)" }} className="px-5 py-3 flex items-center justify-between flex-shrink-0">
                 <div>
@@ -763,6 +876,60 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
                 <p className="text-[8px] text-slate-400">Valid throughout student&apos;s enrollment</p>
                 <p className="text-[8px] text-slate-400 font-semibold">nexora.app</p>
               </div>
+              </div>
+            </div>
+            {/* Visible preview — auto-scales to fit */}
+            <div ref={previewWrapRef} className="w-full overflow-hidden">
+              <div style={{ width: 450, height: 284, fontFamily: "'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "-0.01em", transformOrigin: 'top left' }}
+                className="id-card-preview bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-200 flex flex-col">
+              {/* Card header */}
+              <div style={{ background: "linear-gradient(135deg, #4F46E5, #3730A3)" }} className="px-5 py-3 flex items-center justify-between flex-shrink-0">
+                <div>
+                  <p className="text-white font-bold text-base leading-tight">Nexora</p>
+                  <p className="text-white/70 text-[9px] uppercase tracking-widest font-semibold">Student Identity Card</p>
+                </div>
+                <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
+                  <span className="text-white font-black text-base">N</span>
+                </div>
+              </div>
+              {/* Card body */}
+              <div className="px-5 py-4 flex gap-4 flex-1">
+                <div className="flex-1 flex flex-col min-w-0">
+                  <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Student Name</p>
+                  <p className="text-lg font-bold text-slate-800 leading-snug">{qrStudent.fullName}</p>
+                  <div className="w-full h-px bg-slate-200 my-2.5" />
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+                    <div>
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Student ID</p>
+                      <p className="text-sm font-bold text-indigo-600 font-mono">{qrStudent.studentCode}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Enrolled</p>
+                      <p className="text-sm font-semibold text-slate-700">{new Date(qrStudent.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Teacher</p>
+                      <p className="text-sm font-semibold text-slate-700">{user?.name ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Subject</p>
+                      <p className="text-sm font-semibold text-slate-700">{user?.subject ?? "—"}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center justify-center flex-shrink-0">
+                  <div className="bg-white rounded-xl border-2 border-slate-100 p-1">
+                    {qrDataUrl && <img src={qrDataUrl} alt="QR" style={{ width: 135, height: 135 }} />}
+                  </div>
+                  <p className="text-[8px] text-slate-400 mt-1 text-center">Scan for attendance</p>
+                </div>
+              </div>
+              {/* Card footer */}
+              <div className="px-5 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
+                <p className="text-[8px] text-slate-400">Valid throughout student&apos;s enrollment</p>
+                <p className="text-[8px] text-slate-400 font-semibold">nexora.app</p>
+              </div>
+              </div>
             </div>
 
             {/* Actions */}
@@ -773,6 +940,9 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
           </div>
         )}
       </Modal>
+
+      {/* Attendance History Drawer */}
+      <AttendanceDrawer student={attendanceStudent} onClose={() => setAttendanceStudent(null)} />
 
       {/* Delete Confirmation */}
       {deleteTarget && (

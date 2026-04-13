@@ -1,18 +1,21 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen, Calendar, GraduationCap } from "lucide-react";
+import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen, Calendar, GraduationCap, Sun, Moon, Monitor } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
 import DatePicker from "@/components/shared/DatePicker";
 import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
 import { useFetch } from "@/hooks/useFetch";
 import { getTeacherProfile, updateTeacherProfile, changeTeacherPassword, sendEmailOtp, changeTeacherEmail, getAcademicYearConfig, updateAcademicYearConfig } from "@/services/api";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 
-type Tab = "profile" | "password" | "academic";
+type Tab = "profile" | "password" | "appearance" | "academic";
 
 export default function SettingsPage() {
   const { updateUser } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const dk = theme === "dark";
   const [tab, setTab] = useState<Tab>("profile");
 
   const fetchProfile = useCallback(() => getTeacherProfile(), []);
@@ -205,6 +208,7 @@ export default function SettingsPage() {
   const tabs: { key: Tab; label: string; shortLabel: string; icon: React.ReactNode }[] = [
     { key: "profile", label: "Profile", shortLabel: "Profile", icon: <User className="w-4 h-4" /> },
     { key: "password", label: "Password", shortLabel: "Password", icon: <Lock className="w-4 h-4" /> },
+    { key: "appearance", label: "Appearance", shortLabel: "Theme", icon: <Sun className="w-4 h-4" /> },
     { key: "academic", label: "Academic Year", shortLabel: "Academic", icon: <BookOpen className="w-4 h-4" /> },
   ];
 
@@ -220,23 +224,24 @@ export default function SettingsPage() {
 
         {/* Next Grade Upgrade Banner - always visible */}
         {academicConfig?.nextUpgradeDate && (
-          <div className="rounded-2xl bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border border-amber-200/60 p-4 flex items-center gap-4">
+          <div className={`relative rounded-2xl border p-4 flex items-center gap-4 overflow-hidden ${dk ? "bg-[#2a1f0f] border-amber-500/25" : "bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border-amber-200/60"}`}>
+            <div className={`absolute right-0 top-0 w-32 h-32 rounded-full -translate-y-8 translate-x-8 ${dk ? "bg-amber-500/5" : "bg-gradient-to-bl from-amber-200/20 to-transparent"}`} />
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md flex-shrink-0">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-amber-600/70 uppercase tracking-widest">Next Grade Upgrade</p>
-              <p className="text-sm font-bold text-text mt-0.5">
+            <div className="flex-1 min-w-0 relative">
+              <p className={`text-[10px] font-bold uppercase tracking-widest ${dk ? "text-amber-400/70" : "text-amber-600/70"}`}>Next Grade Upgrade</p>
+              <p className={`text-sm font-bold mt-0.5 ${dk ? "text-amber-100" : "text-text"}`}>
                 {new Date(academicConfig.nextUpgradeDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "long", day: "numeric" })}
               </p>
             </div>
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 relative">
               {(() => {
                 const days = Math.ceil((new Date(academicConfig.nextUpgradeDate + "T00:00:00").getTime() - new Date().setHours(0,0,0,0)) / 86400000);
                 return (
-                  <div className="text-center px-3 py-1.5 rounded-xl bg-white/70 border border-amber-200/50">
-                    <p className="text-lg font-bold text-amber-600 leading-tight">{days <= 0 ? "Due" : days}</p>
-                    <p className="text-[9px] font-semibold text-amber-500/70">{days <= 0 ? "now" : days === 1 ? "day left" : "days left"}</p>
+                  <div className={`text-center px-3 py-1.5 rounded-xl border ${dk ? "bg-amber-500/10 border-amber-500/20" : "bg-white/70 border-amber-200/50"}`}>
+                    <p className={`text-lg font-bold leading-tight ${dk ? "text-amber-400" : "text-amber-600"}`}>{days <= 0 ? "Due" : days}</p>
+                    <p className={`text-[9px] font-semibold ${dk ? "text-amber-400/60" : "text-amber-500/70"}`}>{days <= 0 ? "now" : days === 1 ? "day left" : "days left"}</p>
                   </div>
                 );
               })()}
@@ -245,11 +250,11 @@ export default function SettingsPage() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-bg rounded-xl p-1 border border-border">
+        <div className="grid grid-cols-4 gap-1 bg-bg rounded-xl p-1 border border-border">
           {tabs.map(t => (
             <button key={t.key} onClick={() => { setTab(t.key); setProfileMsg(null); setPwMsg(null); setAcademicMsg(null); }}
-              className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${tab === t.key ? "bg-bg-card text-primary shadow-sm border border-border" : "text-text-muted hover:text-text"}`}>
-              {t.icon} <span className="sm:hidden">{t.shortLabel}</span><span className="hidden sm:inline">{t.label}</span>
+              className={`flex items-center justify-center gap-1 sm:gap-2 px-1 sm:px-4 py-2.5 rounded-lg text-[10px] sm:text-sm font-medium transition-all ${tab === t.key ? "bg-bg-card text-primary shadow-sm border border-border" : "text-text-muted hover:text-text"}`}>
+              {t.icon} <span className="hidden sm:inline">{t.label}</span><span className="sm:hidden">{t.shortLabel}</span>
             </button>
           ))}
         </div>
@@ -436,6 +441,42 @@ export default function SettingsPage() {
 
               <div className="flex justify-end pt-2">
                 <Button onClick={handlePasswordChange} loading={pwSaving}><Lock className="w-4 h-4" /> Change Password</Button>
+              </div>
+            </div>
+          </motion.div>
+        ) : tab === "appearance" ? (
+          <motion.div key="appearance" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
+            className="bg-bg-card rounded-2xl border border-border overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h3 className="font-semibold text-text text-sm">Appearance</h3>
+              <p className="text-xs text-text-muted mt-0.5">Choose how Nexora looks to you</p>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {([
+                  { key: "light" as const, label: "Light", icon: <Sun className="w-5 h-5" />, desc: "Clean & bright", preview: "bg-white border-slate-200" },
+                  { key: "dark" as const, label: "Dark", icon: <Moon className="w-5 h-5" />, desc: "Easy on the eyes", preview: "bg-slate-900 border-slate-700" },
+                ]).map(opt => (
+                  <button key={opt.key} onClick={() => setTheme(opt.key)}
+                    className={`relative flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all ${
+                      theme === opt.key
+                        ? "border-primary bg-primary/5 shadow-md shadow-primary/10"
+                        : "border-border hover:border-primary/30 hover:bg-bg"
+                    }`}>
+                    {theme === opt.key && (
+                      <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                        <CheckCircle className="w-3.5 h-3.5 text-white" />
+                      </div>
+                    )}
+                    <div className={`w-12 h-8 rounded-lg border ${opt.preview} flex items-center justify-center`}>
+                      <div className={`${theme === opt.key ? "text-primary" : "text-text-muted"}`}>{opt.icon}</div>
+                    </div>
+                    <div className="text-center">
+                      <p className={`text-sm font-semibold ${theme === opt.key ? "text-primary" : "text-text"}`}>{opt.label}</p>
+                      <p className="text-[10px] text-text-muted mt-0.5">{opt.desc}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           </motion.div>

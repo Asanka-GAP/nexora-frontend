@@ -1,9 +1,10 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Clock, Users, MapPin, BookOpen, Layers, CalendarDays, GraduationCap } from "lucide-react";
+import { Plus, Trash2, Pencil, Clock, Users, MapPin, BookOpen, Layers, CalendarDays, GraduationCap, History } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
+import DatePicker from "@/components/shared/DatePicker";
 
 import Modal from "@/components/ui/Modal";
 import { useFetch } from "@/hooks/useFetch";
@@ -11,14 +12,17 @@ import { getClasses, createClass, updateClass, deleteClassApi, addScheduleToClas
 import { DAYS } from "@/lib/utils";
 import type { ClassItem } from "@/lib/types";
 import PageSkeleton from "@/components/ui/PageSkeleton";
+import SessionHistoryDrawer from "@/components/classes/SessionHistoryDrawer";
+import { invalidateCache } from "@/lib/cache";
 
-interface ScheduleEntry { dayOfWeek: number; startTime: string; endTime: string; }
+interface ScheduleEntry { scheduleType: string; dayOfWeek: number; sessionDate: string; startTime: string; endTime: string; }
 const emptyForm = { name: "", grade: 1, location: "" };
 const PAGE_SIZE = 10;
 
 export default function ClassesPage() {
   const fetchClasses = useCallback(() => getClasses(), []);
-  const { data: classes, loading, refetch } = useFetch(fetchClasses);
+  const { data: classes, loading, refetch: _refetchClasses } = useFetch(fetchClasses, "classes:all");
+  const refetch = useCallback(() => { invalidateCache("classes"); invalidateCache("dashboard"); _refetchClasses(); }, [_refetchClasses]);
   const [search, setSearch] = useState("");
   const [filterGrade, setFilterGrade] = useState<number | "ALL">("ALL");
   const [modalOpen, setModalOpen] = useState(false);
@@ -29,11 +33,12 @@ export default function ClassesPage() {
   const [deleteTarget, setDeleteTarget] = useState<ClassItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [scheduleClass, setScheduleClass] = useState<ClassItem | null>(null);
-  const [newSchedule, setNewSchedule] = useState<ScheduleEntry>({ dayOfWeek: 1, startTime: "08:00", endTime: "09:00" });
+  const [newSchedule, setNewSchedule] = useState<ScheduleEntry>({ scheduleType: "WEEKLY", dayOfWeek: 1, sessionDate: "", startTime: "08:00", endTime: "09:00" });
   const [addingSched, setAddingSched] = useState(false);
   const [schedPage, setSchedPage] = useState(1);
   const [schedDirection, setSchedDirection] = useState(0);
   const [page, setPage] = useState(1);
+  const [sessionHistoryClass, setSessionHistoryClass] = useState<ClassItem | null>(null);
 
   const SCHED_PAGE_SIZE = 3;
   const schedList = scheduleClass?.schedules ?? [];
@@ -91,7 +96,13 @@ export default function ClassesPage() {
   const handleAddSchedule = async () => {
     if (!scheduleClass) return;
     setAddingSched(true);
-    try { await addScheduleToClass(scheduleClass.id, newSchedule); toast.success("Schedule added"); setNewSchedule({ dayOfWeek: 1, startTime: "08:00", endTime: "09:00" }); refetch(); const updated = (await getClasses()).find(c => c.id === scheduleClass.id); if (updated) { setScheduleClass(updated as ClassItem); const lastPage = Math.ceil((updated.schedules?.length ?? 0) / SCHED_PAGE_SIZE); setSchedDirection(1); setSchedPage(lastPage); } }
+    try { await addScheduleToClass(scheduleClass.id, {
+      scheduleType: newSchedule.scheduleType,
+      dayOfWeek: newSchedule.scheduleType === "WEEKLY" ? newSchedule.dayOfWeek : undefined,
+      sessionDate: newSchedule.scheduleType === "ONE_TIME" ? newSchedule.sessionDate : undefined,
+      startTime: newSchedule.startTime,
+      endTime: newSchedule.endTime,
+    }); toast.success("Schedule added"); setNewSchedule({ scheduleType: "WEEKLY", dayOfWeek: 1, sessionDate: "", startTime: "08:00", endTime: "09:00" }); refetch(); const updated = (await getClasses()).find(c => c.id === scheduleClass.id); if (updated) { setScheduleClass(updated as ClassItem); const lastPage = Math.ceil((updated.schedules?.length ?? 0) / SCHED_PAGE_SIZE); setSchedDirection(1); setSchedPage(lastPage); } }
     catch { toast.error("Failed to add schedule"); }
     finally { setAddingSched(false); }
   };
@@ -102,7 +113,7 @@ export default function ClassesPage() {
     catch { toast.error("Failed to remove schedule"); }
   };
 
-  const addScheduleRow = () => setSchedules([...schedules, { dayOfWeek: 1, startTime: "08:00", endTime: "09:00" }]);
+  const addScheduleRow = () => setSchedules([...schedules, { scheduleType: "WEEKLY", dayOfWeek: 1, sessionDate: "", startTime: "08:00", endTime: "09:00" }]);
   const removeScheduleRow = (idx: number) => setSchedules(schedules.filter((_, i) => i !== idx));
   const updateScheduleRow = (idx: number, key: keyof ScheduleEntry, val: string | number) =>
     setSchedules(schedules.map((s, i) => i === idx ? { ...s, [key]: val } : s));
@@ -200,7 +211,7 @@ export default function ClassesPage() {
           </div>
           {(search || filterGrade !== "ALL") && (<div className="flex items-center gap-2 flex-shrink-0"><span className="text-[11px] font-medium text-text-muted">{filtered.length} found</span><button onClick={() => { setSearch(""); setFilterGrade("ALL"); }} className="text-[11px] font-semibold text-primary hover:underline">Clear all</button></div>)}
         </div>
-        {grades.length > 1 && (<div className="flex flex-wrap items-center gap-1 mt-3"><div className="flex items-center bg-slate-100/80 rounded-xl p-0.5">{(["ALL" as const, ...grades]).map(g => (<button key={g} onClick={() => setFilterGrade(g)} className={`px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all whitespace-nowrap ${filterGrade === g ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>{g === "ALL" ? "All" : `G${g}`}</button>))}</div></div>)}
+        {grades.length > 1 && (<div className="flex flex-wrap items-center gap-1 mt-3"><div className="flex items-center bg-bg rounded-xl p-0.5 border border-border">{(["ALL" as const, ...grades]).map(g => (<button key={g} onClick={() => setFilterGrade(g)} className={`px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all whitespace-nowrap ${filterGrade === g ? "bg-bg-card text-text shadow-sm" : "text-text-muted hover:text-text"}`}>{g === "ALL" ? "All" : `G${g}`}</button>))}</div></div>)}
       </div>
 
       {/* Table */}
@@ -215,20 +226,20 @@ export default function ClassesPage() {
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-bg/60">
-                  {["Class", "Grade", "Schedule", "Students", ""].map(h => (
-                    <th key={h} className="text-left px-5 py-3.5 text-[10px] font-bold text-text-muted uppercase tracking-widest border-b border-border">{h}</th>
+                <tr className="border-b border-border">
+                  {["Class", "Grade", "Sessions", "Students", ""].map(h => (
+                    <th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider border-b border-border">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {paginated.map((cls, i) => (
                   <motion.tr key={cls.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                    className="border-b border-border/40 hover:bg-primary/[0.02] transition-colors group">
+                    className="border-b border-border/50 hover:bg-bg/50 transition-colors group">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-100 to-sky-50 flex items-center justify-center flex-shrink-0">
-                          <BookOpen className="w-4 h-4 text-blue-500" />
+                        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <BookOpen className="w-4 h-4 text-primary" />
                         </div>
                         <div className="min-w-0">
                           <span className="text-sm font-semibold text-text">{cls.name}</span>
@@ -237,36 +248,46 @@ export default function ClassesPage() {
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700">Grade {cls.grade}</span>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-secondary/15 text-cyan-800">{cls.grade}</span>
                     </td>
 
                     <td className="px-5 py-4">
-                      {cls.schedules?.length ? (
-                        <div className="flex flex-wrap gap-1">
-                          {cls.schedules.slice(0, 3).map(s => (
-                            <span key={s.id} className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-bg text-text-muted">
-                              {DAYS[s.dayOfWeek]?.slice(0, 3)} {s.startTime.slice(0, 5)}
-                            </span>
-                          ))}
-                          {cls.schedules.length > 3 && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-bg text-text-muted">+{cls.schedules.length - 3}</span>
-                          )}
-                        </div>
-                      ) : <span className="text-xs text-text-muted/50">No schedule</span>}
+                      {(() => {
+                        const comp = cls.completedSessions || 0;
+                        const canc = cls.cancelledSessions || 0;
+                        const past = comp + canc;
+                        const pct = past > 0 ? Math.round((comp / past) * 100) : 0;
+                        const barColor = past === 0 ? "bg-slate-300" : pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+                        const statusColor = past === 0 ? "text-slate-400" : pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600";
+                        const statusLabel = past === 0 ? "No Data" : pct >= 75 ? "Good" : pct >= 50 ? "Low" : "Critical";
+                        return (
+                          <div className="min-w-[100px]">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-semibold text-text">{past > 0 ? `${pct}%` : "—"}</span>
+                              <span className={`text-[10px] font-semibold ${statusColor}`}>{statusLabel}</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${past > 0 ? pct : 0}%` }} />
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{comp} done · {canc} cancelled</p>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-sky-50 flex items-center justify-center">
-                          <Users className="w-3.5 h-3.5 text-sky-600" />
+                        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Users className="w-3.5 h-3.5 text-primary" />
                         </div>
                         <span className="text-sm font-bold text-text">{cls.studentCount}</span>
                       </div>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-0.5">
-                        <button onClick={() => setScheduleClass(cls)} className="p-2 rounded-xl text-text-muted hover:text-primary hover:bg-primary/10 transition-all" title="Manage Schedule"><Clock className="w-4 h-4" /></button>
-                        <button onClick={() => openEdit(cls)} className="p-2 rounded-xl text-text-muted hover:text-primary hover:bg-primary/10 transition-all" title="Edit"><Pencil className="w-4 h-4" /></button>
-                        <button onClick={() => setDeleteTarget(cls)} className="p-2 rounded-xl text-text-muted hover:text-danger hover:bg-danger/10 transition-all" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => setSessionHistoryClass(cls)} className="p-1.5 text-text-muted hover:text-primary transition-colors" title="Session History"><History className="w-4 h-4" /></button>
+                        <button onClick={() => setScheduleClass(cls)} className="p-1.5 text-text-muted hover:text-primary transition-colors" title="Manage Schedule"><Clock className="w-4 h-4" /></button>
+                        <button onClick={() => openEdit(cls)} className="p-1.5 text-text-muted hover:text-primary transition-colors" title="Edit"><Pencil className="w-4 h-4" /></button>
+                        <button onClick={() => setDeleteTarget(cls)} className="p-1.5 text-text-muted hover:text-danger transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </motion.tr>
@@ -284,17 +305,40 @@ export default function ClassesPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div><p className="font-semibold text-text text-sm truncate">{cls.name}</p>{cls.location && <p className="text-xs text-text-muted truncate">{cls.location}</p>}</div>
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 bg-emerald-100 text-emerald-700">Grade {cls.grade}</span>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 bg-secondary/15 text-cyan-800">{cls.grade}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2 mb-3">
-                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[10px] font-semibold text-text-muted uppercase">Students</p><p className="text-sm font-bold text-text mt-0.5">{cls.studentCount}</p></div>
-                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[10px] font-semibold text-text-muted uppercase">Schedules</p><p className="text-sm font-medium text-text mt-0.5">{cls.schedules?.length || 0} slots</p></div>
-                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[10px] font-semibold text-text-muted uppercase">Next</p><p className="text-sm font-medium text-text mt-0.5 truncate">{cls.schedules?.[0] ? `${DAYS[cls.schedules[0].dayOfWeek]?.slice(0, 3)}` : "—"}</p></div>
+                      <div className="bg-white rounded-lg px-2.5 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.08)] border border-slate-100"><p className="text-[10px] font-semibold text-text-muted uppercase">Students</p><p className="text-sm font-bold text-text mt-0.5">{cls.studentCount}</p></div>
+                      <div className="bg-white rounded-lg px-2.5 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.08)] border border-slate-100"><p className="text-[10px] font-semibold text-text-muted uppercase">Schedules</p><p className="text-sm font-medium text-text mt-0.5">{cls.schedules?.length || 0} slots</p></div>
+                      <div className="bg-white rounded-lg px-2.5 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.08)] border border-slate-100"><p className="text-[10px] font-semibold text-text-muted uppercase">Sessions</p><p className="text-sm font-medium text-text mt-0.5">{(cls.completedSessions || 0) + (cls.cancelledSessions || 0)}</p></div>
                     </div>
+                    {/* Session Health Bar */}
+                    {(() => {
+                      const comp = cls.completedSessions || 0;
+                      const canc = cls.cancelledSessions || 0;
+                      const past = comp + canc;
+                      const pct = past > 0 ? Math.round((comp / past) * 100) : 0;
+                      const barColor = past === 0 ? "bg-slate-300" : pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+                      const statusColor = past === 0 ? "text-slate-400" : pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600";
+                      const statusLabel = past === 0 ? "No Data" : pct >= 75 ? "Good" : pct >= 50 ? "Low" : "Critical";
+                      return (
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-text-muted"><span className="font-bold text-text">{past > 0 ? `${pct}%` : "—"}</span> completion</span>
+                            <span className={`text-[10px] font-semibold ${statusColor}`}>{statusLabel}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${past > 0 ? pct : 0}%` }} />
+                          </div>
+                          <p className="text-[10px] text-text-muted mt-0.5">{comp} done · {canc} cancelled</p>
+                        </div>
+                      );
+                    })()}
                     <div className="flex items-center gap-1.5">
-                      <button onClick={() => setScheduleClass(cls)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-primary bg-primary/[0.06] hover:bg-primary/[0.12] transition-all"><Clock className="w-4 h-4" /><span className="text-xs font-semibold hidden sm:inline">Schedule</span></button>
-                      <button onClick={() => openEdit(cls)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-primary bg-primary/[0.06] hover:bg-primary/[0.12] transition-all"><Pencil className="w-4 h-4" /><span className="text-xs font-semibold hidden sm:inline">Edit</span></button>
-                      <button onClick={() => setDeleteTarget(cls)} className="flex-1 flex items-center justify-center py-2 rounded-xl text-danger bg-danger/[0.06] hover:bg-danger/[0.12] transition-all"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => setSessionHistoryClass(cls)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-primary bg-primary/10 hover:bg-primary/20 transition-all"><History className="w-4 h-4" /><span className="text-xs font-semibold hidden sm:inline">Sessions</span></button>
+                      <button onClick={() => setScheduleClass(cls)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-primary bg-primary/10 hover:bg-primary/20 transition-all"><Clock className="w-4 h-4" /><span className="text-xs font-semibold hidden sm:inline">Schedule</span></button>
+                      <button onClick={() => openEdit(cls)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-primary bg-primary/10 hover:bg-primary/20 transition-all"><Pencil className="w-4 h-4" /><span className="text-xs font-semibold hidden sm:inline">Edit</span></button>
+                      <button onClick={() => setDeleteTarget(cls)} className="flex-1 flex items-center justify-center py-2 rounded-xl text-danger bg-danger/10 hover:bg-danger/20 transition-all"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </div>
                 </div>
@@ -381,15 +425,15 @@ export default function ClassesPage() {
                 </div>
                 {schedules.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-6 rounded-xl border border-dashed border-border">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center mb-2">
-                      <Clock className="w-5 h-5 text-blue-600" />
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-2">
+                      <Clock className="w-5 h-5 text-primary" />
                     </div>
                     <p className="text-xs text-text-muted">No schedule yet. Add time slots or do it later.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {schedules.map((s, idx) => (
-                      <div key={idx} className="rounded-xl border border-border bg-bg/30 p-4">
+                      <div key={idx} className="rounded-xl border border-border bg-bg-card p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
@@ -399,7 +443,21 @@ export default function ClassesPage() {
                           </div>
                           <button type="button" onClick={() => removeScheduleRow(idx)} className="p-1.5 rounded-lg text-text-muted/40 hover:text-danger hover:bg-danger/10 transition-all" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
-                        {/* Day chips */}
+                        {/* Type toggle */}
+                        <div className="mb-3">
+                          <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Type</label>
+                          <div className="flex items-center bg-slate-100/80 rounded-xl p-0.5 w-fit">
+                            {(["WEEKLY", "ONE_TIME"] as const).map(t => (
+                              <button key={t} type="button" onClick={() => updateScheduleRow(idx, "scheduleType", t)}
+                                className={`px-3.5 py-1.5 rounded-[10px] text-xs font-semibold transition-all whitespace-nowrap ${s.scheduleType === t ? "text-white shadow-sm" : "text-text-muted hover:text-text"}`}
+                                style={s.scheduleType === t ? { background: "linear-gradient(135deg, #2563eb, #1d4ed8)" } : {}}>
+                                {t === "WEEKLY" ? "Weekly" : "One-Time"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Day chips or Date picker */}
+                        {s.scheduleType === "WEEKLY" ? (
                         <div className="mb-3">
                           <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Day</label>
                           <div className="flex flex-wrap gap-1.5">
@@ -408,13 +466,19 @@ export default function ClassesPage() {
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                                   s.dayOfWeek === i
                                     ? "bg-blue-700 text-white shadow-sm"
-                                    : "bg-bg text-text-muted hover:bg-border/60"
+                                    : "bg-bg-card text-text-muted hover:bg-bg"
                                 }`}>
                                 {d.slice(0, 3)}
                               </button>
                             ))}
                           </div>
                         </div>
+                        ) : (
+                        <div className="mb-3">
+                          <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Date</label>
+                          <DatePicker value={s.sessionDate} onChange={v => updateScheduleRow(idx, "sessionDate", v)} fullWidth />
+                        </div>
+                        )}
                         {/* Time range */}
                         <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
                           <div className="text-center">
@@ -488,13 +552,22 @@ export default function ClassesPage() {
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: i * 0.06, duration: 0.2 }}
-                          className="flex items-center gap-3 rounded-xl border border-border bg-bg/50 px-4 py-3 group hover:border-sky-200 transition-all"
+                          className="flex items-center gap-3 rounded-xl border border-border bg-bg-card px-4 py-3 group hover:border-primary/30 transition-all"
                         >
-                          <div className="w-9 h-9 rounded-lg bg-sky-50 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs font-bold text-sky-600">{(schedPage - 1) * SCHED_PAGE_SIZE + i + 1}</span>
+                          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs font-bold text-primary">{(schedPage - 1) * SCHED_PAGE_SIZE + i + 1}</span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-text">{DAYS[s.dayOfWeek]}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-text">
+                                {s.scheduleType === "ONE_TIME" && s.sessionDate
+                                  ? new Date(s.sessionDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+                                  : DAYS[s.dayOfWeek]}
+                              </p>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${s.scheduleType === "ONE_TIME" ? "bg-warning/15 text-warning" : "bg-primary/10 text-primary"}`}>
+                                {s.scheduleType === "ONE_TIME" ? "Once" : "Weekly"}
+                              </span>
+                            </div>
                             <p className="text-xs text-text-muted">{s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}</p>
                           </div>
                           <button onClick={() => handleDeleteSchedule(s.id)} className="p-2 rounded-lg text-danger/40 hover:text-danger hover:bg-danger/10 transition-all"><Trash2 className="w-4 h-4" /></button>
@@ -511,7 +584,7 @@ export default function ClassesPage() {
                         className="px-2 py-1 text-xs rounded-lg text-text-muted hover:bg-border/50 disabled:opacity-30 transition">‹</button>
                       {Array.from({ length: schedTotalPages }, (_, i) => i + 1).map(p => (
                         <button key={p} onClick={() => goSchedPage(p)}
-                          className={`min-w-[24px] py-1 text-[11px] rounded-lg font-semibold transition ${schedPage === p ? "text-white bg-sky-500 shadow-sm" : "text-text-muted hover:bg-border/50"}`}>{p}</button>
+                          className={`min-w-[24px] py-1 text-[11px] rounded-lg font-semibold transition ${schedPage === p ? "text-white bg-primary shadow-sm" : "text-text-muted hover:bg-bg"}`}>{p}</button>
                       ))}
                       <button onClick={() => goSchedPage(schedPage + 1)} disabled={schedPage === schedTotalPages}
                         className="px-2 py-1 text-xs rounded-lg text-text-muted hover:bg-border/50 disabled:opacity-30 transition">›</button>
@@ -521,8 +594,8 @@ export default function ClassesPage() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-8 rounded-xl border border-dashed border-border">
-                <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center mb-2">
-                  <CalendarDays className="w-5 h-5 text-sky-400" />
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-2">
+                  <CalendarDays className="w-5 h-5 text-primary" />
                 </div>
                 <p className="text-xs font-medium text-text-muted">No schedules assigned yet</p>
               </div>
@@ -532,7 +605,22 @@ export default function ClassesPage() {
           {/* Add new schedule */}
           <div>
             <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-3">Add New Slot</p>
-            <div className="rounded-xl border border-border bg-bg/30 p-4 space-y-4">
+            <div className="rounded-xl border border-border bg-bg-card p-4 space-y-4">
+              {/* Type toggle */}
+              <div>
+                <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Type</label>
+                <div className="flex items-center bg-slate-100/80 rounded-xl p-0.5 w-fit">
+                  {(["WEEKLY", "ONE_TIME"] as const).map(t => (
+                    <button key={t} type="button" onClick={() => setNewSchedule({ ...newSchedule, scheduleType: t })}
+                      className={`px-3.5 py-1.5 rounded-[10px] text-xs font-semibold transition-all whitespace-nowrap ${newSchedule.scheduleType === t ? "text-white shadow-sm" : "text-text-muted hover:text-text"}`}
+                      style={newSchedule.scheduleType === t ? { background: "linear-gradient(135deg, #0284c7, #0e7490)" } : {}}>
+                      {t === "WEEKLY" ? "Weekly" : "One-Time"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Day or Date */}
+              {newSchedule.scheduleType === "WEEKLY" ? (
               <div>
                 <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Day</label>
                 <div className="flex flex-wrap gap-1.5">
@@ -540,14 +628,20 @@ export default function ClassesPage() {
                     <button key={i} type="button" onClick={() => setNewSchedule({ ...newSchedule, dayOfWeek: i })}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                         newSchedule.dayOfWeek === i
-                          ? "bg-sky-500 text-white shadow-sm"
-                          : "bg-bg text-text-muted hover:bg-border/60"
+                          ? "bg-primary text-white shadow-sm"
+                          : "bg-bg-card text-text-muted hover:bg-bg"
                       }`}>
                       {d.slice(0, 3)}
                     </button>
                   ))}
                 </div>
               </div>
+              ) : (
+              <div>
+                <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Date</label>
+                <DatePicker value={newSchedule.sessionDate} onChange={v => setNewSchedule({ ...newSchedule, sessionDate: v })} fullWidth />
+              </div>
+              )}
               <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
                 <div className="text-center">
                   <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Start</label>
@@ -571,6 +665,9 @@ export default function ClassesPage() {
           <Button onClick={handleAddSchedule} loading={addingSched}><Plus className="h-4 w-4" /> Add Slot</Button>
         </div>
       </Modal>
+
+      {/* Session History Drawer */}
+      <SessionHistoryDrawer classItem={sessionHistoryClass} onClose={() => setSessionHistoryClass(null)} />
 
       {/* Delete Confirmation */}
       {deleteTarget && (

@@ -7,6 +7,7 @@ import { useFetch } from "@/hooks/useFetch";
 import { getSchedules, cancelSchedule, reactivateSchedule } from "@/services/api";
 import type { Schedule } from "@/lib/types";
 import PageSkeleton from "@/components/ui/PageSkeleton";
+import DatePicker from "@/components/shared/DatePicker";
 
 type StatusFilter = "ALL" | "UPCOMING" | "COMPLETED" | "CANCELLED";
 const STATUSES: { id: StatusFilter; label: string }[] = [
@@ -188,8 +189,8 @@ export default function SchedulePage() {
                   <div className="p-4 space-y-3">
                     <p className="text-xs font-bold text-text-muted uppercase tracking-widest px-1">Custom Range</p>
                     <div className="grid grid-cols-2 gap-3">
-                      <div><label className="text-xs font-semibold text-text-muted mb-1.5 block">From</label><input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-border text-sm text-text bg-bg focus:outline-none focus:ring-2 focus:ring-primary/20" /></div>
-                      <div><label className="text-xs font-semibold text-text-muted mb-1.5 block">To</label><input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-border text-sm text-text bg-bg focus:outline-none focus:ring-2 focus:ring-primary/20" /></div>
+                      <div><label className="text-xs font-semibold text-text-muted mb-1.5 block">From</label><DatePicker value={dateFrom} onChange={v => setDateFrom(v)} fullWidth /></div>
+                      <div><label className="text-xs font-semibold text-text-muted mb-1.5 block">To</label><DatePicker value={dateTo} onChange={v => setDateTo(v)} minDate={dateFrom} fullWidth /></div>
                     </div>
                     <div className="flex items-center justify-between bg-primary/5 rounded-xl px-4 py-2.5">
                       <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary animate-pulse" /><span className="text-xs font-semibold text-primary">{formatDate(dateFrom)} → {formatDate(dateTo)}</span></div>
