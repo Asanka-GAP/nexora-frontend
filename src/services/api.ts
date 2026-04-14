@@ -3,6 +3,7 @@ import type {
   ApiResponse, Student, StudentCreateRequest, ClassItem,
   ClassCreateRequest, MarkAttendanceRequest, MarkAttendanceResponse, Schedule,
   AttendanceRecord, LoginResponse, AdminDashboard, TeacherItem, TeacherProfile,
+  CurrentMonthUsage, BillingHistory,
 } from "@/lib/types";
 
 const api = axios.create({
@@ -165,6 +166,9 @@ export const toggleTeacherStatus = (id: string) =>
 export const deleteTeacher = (id: string) =>
   api.delete<ApiResponse<void>>(`/admin/teachers/${id}`);
 
+export const getTeacherBilling = (id: string) =>
+  api.get<ApiResponse<{ teacherName: string; currentMonth: CurrentMonthUsage; billingHistory: BillingHistory }>>(`/admin/teachers/${id}/billing`).then((r) => r.data.data);
+
 // Teacher Settings
 export const getTeacherProfile = () =>
   api.get<ApiResponse<TeacherProfile>>("/settings/profile").then((r) => r.data.data);
@@ -187,5 +191,16 @@ export const getAcademicYearConfig = () =>
 
 export const updateAcademicYearConfig = (data: { nextUpgradeDate: string }) =>
   api.put<ApiResponse<{ nextUpgradeDate: string; lastUpgradedAt: string | null }>>("/settings/academic-year", data).then((r) => r.data.data);
+
+// SMS Settings
+export const updateSmsSettings = (data: { smsNotificationsEnabled: boolean }) =>
+  api.put<ApiResponse<TeacherProfile>>("/settings/sms-settings", data).then((r) => r.data.data);
+
+// Billing
+export const getCurrentMonthUsage = () =>
+  api.get<ApiResponse<CurrentMonthUsage>>("/billing/current-month").then((r) => r.data.data);
+
+export const getBillingHistory = () =>
+  api.get<ApiResponse<BillingHistory>>("/billing/history").then((r) => r.data.data);
 
 export default api;

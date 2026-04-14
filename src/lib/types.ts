@@ -92,6 +92,7 @@ export interface MarkAttendanceResponse {
   checkInTime: string;
   status: string;
   message: string;
+  smsInfo?: SmsInfo;
 }
 
 export interface AttendanceRecord {
@@ -145,7 +146,19 @@ export interface AdminDashboard {
   activeTeachers: number;
   totalClasses: number;
   totalStudents: number;
+  smsBalance: number;
+  smsBalanceExpiry?: string;
+  smsProfile?: SmsProfile;
   recentTeachers: RecentTeacher[];
+}
+
+export interface SmsProfile {
+  firstName: string;
+  lastName?: string;
+  email: string;
+  timezone: string;
+  lastAccessAt: string;
+  apiToken: string;
 }
 
 export interface RecentTeacher {
@@ -166,6 +179,7 @@ export interface TeacherProfile {
   phone: string;
   subject: string;
   role: string;
+  smsNotificationsEnabled: boolean;
 }
 
 export interface TeacherItem {
@@ -179,4 +193,39 @@ export interface TeacherItem {
   status: string;
   firstLogin: boolean;
   createdAt: string;
+}
+
+// Billing
+export interface MonthlyBill {
+  month: string; // "2024-01"
+  monthDisplay: string; // "January 2024"
+  smsUnits: number;
+  smsCost: number;
+  messagesSent: number;
+  softwareCost: number;
+  totalCost: number;
+}
+
+export interface CurrentMonthUsage {
+  currentMonth: string;
+  monthDisplay: string;
+  currentUnits: number;
+  currentSmsCost: number;
+  messagesSent: number;
+  softwareCost: number;
+  totalCurrentCost: number;
+  usageDisplay: string;
+}
+
+export interface BillingHistory {
+  monthlyBills: MonthlyBill[];
+  currentMonth: MonthlyBill;
+}
+
+export interface SmsInfo {
+  smsMessage: string;
+  messageLength: number;
+  smsUnits: number;
+  smsCost: number;
+  parentPhone: string;
 }

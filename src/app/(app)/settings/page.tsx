@@ -1,16 +1,16 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen, Calendar, GraduationCap, Sun, Moon, Monitor } from "lucide-react";
+import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen, Calendar, GraduationCap, Sun, Moon, Monitor, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
 import DatePicker from "@/components/shared/DatePicker";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useFetch } from "@/hooks/useFetch";
-import { getTeacherProfile, updateTeacherProfile, changeTeacherPassword, sendEmailOtp, changeTeacherEmail, getAcademicYearConfig, updateAcademicYearConfig } from "@/services/api";
+import { getTeacherProfile, updateTeacherProfile, changeTeacherPassword, sendEmailOtp, changeTeacherEmail, getAcademicYearConfig, updateAcademicYearConfig, updateSmsSettings } from "@/services/api";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 
-type Tab = "profile" | "password" | "appearance" | "academic";
+type Tab = "profile" | "password" | "sms" | "appearance" | "academic";
 
 export default function SettingsPage() {
   const { updateUser } = useAuth();
@@ -55,12 +55,18 @@ export default function SettingsPage() {
   const [academicSaving, setAcademicSaving] = useState(false);
   const [academicMsg, setAcademicMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // SMS settings
+  const [smsNotificationsEnabled, setSmsNotificationsEnabled] = useState(true);
+  const [smsSaving, setSmsSaving] = useState(false);
+  const [smsMsg, setSmsMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   useEffect(() => {
     if (profile) {
       setName(profile.name ?? "");
       setPhone(profile.phone ?? "");
       setSubject(profile.subject ?? "");
       setEmail(profile.email ?? "");
+      setSmsNotificationsEnabled(profile.smsNotificationsEnabled ?? true);
     }
   }, [profile]);
 
@@ -205,9 +211,26 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSmsSettingsSave = async () => {
+    setSmsSaving(true);
+    setSmsMsg(null);
+    try {
+      const updated = await updateSmsSettings({ smsNotificationsEnabled });
+      setSmsMsg({ type: "success", text: "SMS settings updated successfully" });
+      refetch(); // Refresh profile to get updated data
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        || (e instanceof Error ? e.message : "Failed to update SMS settings");
+      setSmsMsg({ type: "error", text: msg });
+    } finally {
+      setSmsSaving(false);
+    }
+  };
+
   const tabs: { key: Tab; label: string; shortLabel: string; icon: React.ReactNode }[] = [
     { key: "profile", label: "Profile", shortLabel: "Profile", icon: <User className="w-4 h-4" /> },
     { key: "password", label: "Password", shortLabel: "Password", icon: <Lock className="w-4 h-4" /> },
+    { key: "sms", label: "SMS Notifications", shortLabel: "SMS", icon: <MessageSquare className="w-4 h-4" /> },
     { key: "appearance", label: "Appearance", shortLabel: "Theme", icon: <Sun className="w-4 h-4" /> },
     { key: "academic", label: "Academic Year", shortLabel: "Academic", icon: <BookOpen className="w-4 h-4" /> },
   ];
@@ -250,9 +273,9 @@ export default function SettingsPage() {
         )}
 
         {/* Tabs */}
-        <div className="grid grid-cols-4 gap-1 bg-bg rounded-xl p-1 border border-border">
+        <div className="grid grid-cols-5 gap-1 bg-bg rounded-xl p-1 border border-border">
           {tabs.map(t => (
-            <button key={t.key} onClick={() => { setTab(t.key); setProfileMsg(null); setPwMsg(null); setAcademicMsg(null); }}
+            <button key={t.key} onClick={() => { setTab(t.key); setProfileMsg(null); setPwMsg(null); setSmsMsg(null); setAcademicMsg(null); }}
               className={`flex items-center justify-center gap-1 sm:gap-2 px-1 sm:px-4 py-2.5 rounded-lg text-[10px] sm:text-sm font-medium transition-all ${tab === t.key ? "bg-bg-card text-primary shadow-sm border border-border" : "text-text-muted hover:text-text"}`}>
               {t.icon} <span className="hidden sm:inline">{t.label}</span><span className="sm:hidden">{t.shortLabel}</span>
             </button>
@@ -441,6 +464,117 @@ export default function SettingsPage() {
 
               <div className="flex justify-end pt-2">
                 <Button onClick={handlePasswordChange} loading={pwSaving}><Lock className="w-4 h-4" /> Change Password</Button>
+              </div>
+            </div>
+          </motion.div>
+        ) : tab === "sms" ? (
+          <motion.div key="sms" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
+            className="bg-bg-card rounded-2xl border border-border overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h3 className="font-semibold text-text text-sm">SMS Notifications</h3>
+              <p className="text-xs text-text-muted mt-0.5">Control when SMS messages are sent to parents</p>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* SMS Status Card */}
+              <div className={`rounded-2xl border p-5 ${smsNotificationsEnabled 
+                ? (dk ? "bg-emerald-500/5 border-emerald-500/20" : "bg-emerald-50 border-emerald-200") 
+                : (dk ? "bg-red-500/5 border-red-500/20" : "bg-red-50 border-red-200")
+              }`}>
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${smsNotificationsEnabled 
+                    ? "bg-emerald-500/10" : "bg-red-500/10"
+                  }`}>
+                    <MessageSquare className={`w-6 h-6 ${smsNotificationsEnabled ? "text-emerald-600" : "text-red-600"}`} />
+                  </div>
+                  <div className="flex-1">
+                    <p className={`font-semibold ${smsNotificationsEnabled 
+                      ? (dk ? "text-emerald-400" : "text-emerald-700") 
+                      : (dk ? "text-red-400" : "text-red-700")
+                    }`}>
+                      SMS Notifications {smsNotificationsEnabled ? "Enabled" : "Disabled"}
+                    </p>
+                    <p className={`text-xs mt-0.5 ${smsNotificationsEnabled 
+                      ? (dk ? "text-emerald-300/70" : "text-emerald-600/70") 
+                      : (dk ? "text-red-300/70" : "text-red-600/70")
+                    }`}>
+                      {smsNotificationsEnabled 
+                        ? "Parents will receive SMS when students are marked present" 
+                        : "No SMS messages will be sent to parents"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggle Setting */}
+              <div className="rounded-xl border border-border bg-bg p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-text text-sm">Send SMS Notifications</h4>
+                    <p className="text-xs text-text-muted mt-1">
+                      When enabled, parents receive SMS messages when their children are marked present for classes.
+                      {!smsNotificationsEnabled && " Attendance marking will continue to work normally."}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSmsNotificationsEnabled(!smsNotificationsEnabled)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 ${
+                      smsNotificationsEnabled ? "bg-primary" : "bg-border"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        smsNotificationsEnabled ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Information Cards */}
+              <div className="space-y-3">
+                <div className="rounded-xl border border-border bg-bg p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                      <MessageSquare className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-text">SMS Template</p>
+                      <p className="text-xs text-text-muted mt-1">
+                        Messages follow this format: "Dear Parent, [Student Name] has been marked present for [Class Name] on [Date] at [Time]. - [Teacher Name]"
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border bg-bg p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                      <AlertCircle className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-text">Billing Impact</p>
+                      <p className="text-xs text-text-muted mt-1">
+                        {smsNotificationsEnabled 
+                          ? "SMS costs will be calculated and added to your monthly bill at LKR 1.30 per unit (160 characters)."
+                          : "No SMS charges will be applied when notifications are disabled."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {smsMsg && (
+                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium ${smsMsg.type === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                  {smsMsg.type === "success" ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                  {smsMsg.text}
+                </div>
+              )}
+
+              <div className="flex justify-end pt-2">
+                <Button onClick={handleSmsSettingsSave} loading={smsSaving}>
+                  <Save className="w-4 h-4" /> Save SMS Settings
+                </Button>
               </div>
             </div>
           </motion.div>

@@ -36,6 +36,7 @@ export default function AttendancePage() {
   const [classSearch, setClassSearch] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState(""); // "" = All, "PRESENT", "ABSENT"
   const [page, setPage] = useState(1);
 
   const fetchRecords = useCallback(() => getAttendance({
@@ -49,13 +50,25 @@ export default function AttendancePage() {
   const fetchTodayCount = useCallback(() => getTodayAttendanceCount(), []);
   const { data: todayCount } = useFetch(fetchTodayCount);
 
-  useEffect(() => { setPage(1); }, [dateFrom, dateTo, classFilter, search]);
+  useEffect(() => { setPage(1); }, [dateFrom, dateTo, classFilter, search, statusFilter]);
 
   const all = records ?? [];
   const filtered = all.filter(r => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return r.studentName.toLowerCase().includes(q) || r.studentCode.toLowerCase().includes(q) || r.className.toLowerCase().includes(q);
+    // Search filter
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const matchesSearch = r.studentName.toLowerCase().includes(q) || 
+                           r.studentCode.toLowerCase().includes(q) || 
+                           r.className.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+    }
+    
+    // Status filter
+    if (statusFilter && r.status !== statusFilter) {
+      return false;
+    }
+    
+    return true;
   });
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
@@ -63,8 +76,10 @@ export default function AttendancePage() {
   const activePreset = getActivePreset(dateFrom, dateTo);
   const dateLabel = activePreset || `${formatDate(dateFrom)} — ${formatDate(dateTo)}`;
 
-  const uniqueStudents = new Set(all.map(r => r.studentId)).size;
-  const uniqueClasses = new Set(all.map(r => r.classId)).size;
+  const uniqueStudents = new Set(filtered.map(r => r.studentId)).size;
+  const uniqueClasses = new Set(filtered.map(r => r.classId)).size;
+  const presentCount = filtered.filter(r => r.status === "PRESENT").length;
+  const absentCount = filtered.filter(r => r.status === "ABSENT").length;
 
   const pageNums = Array.from({ length: totalPages }, (_, i) => i + 1)
     .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
@@ -83,9 +98,9 @@ export default function AttendancePage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
           { label: "TODAY", value: todayCount ?? 0, sub: "Scans today", gradient: "from-[#4F46E5] to-[#3730A3]", accentColor: "#4F46E5", icon: <CheckCircle className="w-5 h-5" />, trend: "+12%", up: true },
-          { label: "RECORDS", value: all.length, sub: activePreset || "Selected range", gradient: "from-emerald-500 to-emerald-600", accentColor: "#10b981", icon: <Calendar className="w-5 h-5" />, trend: null, up: null },
+          { label: "PRESENT", value: presentCount, sub: statusFilter ? "Filtered results" : "In selected range", gradient: "from-emerald-500 to-emerald-600", accentColor: "#10b981", icon: <CheckCircle className="w-5 h-5" />, trend: null, up: null },
+          { label: "ABSENT", value: absentCount, sub: statusFilter ? "Filtered results" : "In selected range", gradient: "from-red-500 to-red-600", accentColor: "#ef4444", icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>, trend: null, up: null },
           { label: "STUDENTS", value: uniqueStudents, sub: "Unique students", gradient: "from-violet-500 to-purple-600", accentColor: "#8b5cf6", icon: <Users className="w-5 h-5" />, trend: null, up: null },
-          { label: "CLASSES", value: uniqueClasses, sub: "Classes with attendance", gradient: "from-amber-500 to-orange-500", accentColor: "#f59e0b", icon: <Clock className="w-5 h-5" />, trend: null, up: null },
         ].map((card, i) => (
           <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
             className="relative bg-white rounded-2xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] transition-all duration-200 overflow-hidden group">
@@ -157,6 +172,28 @@ export default function AttendancePage() {
               </>)}
             </AnimatePresence>
           </div>
+          {/* Status filter - Segment buttons */}
+          <div className="flex rounded-xl border border-border bg-bg p-1 w-full sm:w-auto">
+            {[
+              { key: "", label: "All", icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m0 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m6-6h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5" /></svg> },
+              { key: "PRESENT", label: "Present", icon: <CheckCircle className="w-4 h-4" /> },
+              { key: "ABSENT", label: "Absent", icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg> }
+            ].map(status => (
+              <button
+                key={status.key}
+                onClick={() => setStatusFilter(status.key)}
+                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all flex-1 sm:flex-initial whitespace-nowrap ${
+                  statusFilter === status.key
+                    ? "bg-bg-card text-primary shadow-sm border border-border"
+                    : "text-text-muted hover:text-text"
+                }`}
+              >
+                {status.icon}
+                <span className="hidden sm:inline">{status.label}</span>
+                <span className="sm:hidden text-xs">{status.label}</span>
+              </button>
+            ))}
+          </div>
           {/* Date range */}
           <div className="relative w-full sm:w-auto">
             <button onClick={() => setDateOpen(!dateOpen)} className={`w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${activePreset ? "border-primary/30 bg-primary/5 text-primary shadow-sm" : "border-border text-text-muted hover:bg-bg"}`}>
@@ -191,14 +228,91 @@ export default function AttendancePage() {
             </AnimatePresence>
           </div>
         </div>
+        
+        {/* Active Filters Summary */}
+        {(search.trim() || statusFilter || classFilter) && (
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border">
+            <span className="text-xs font-semibold text-text-muted">Active filters:</span>
+            {search.trim() && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-3.5 h-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+                Search: "{search.trim()}"
+                <button onClick={() => setSearch("")} className="ml-1 hover:bg-primary/20 rounded p-0.5 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+            )}
+            {statusFilter && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
+                {statusFilter === "PRESENT" ? <CheckCircle className="w-3.5 h-3.5" /> : 
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-3.5 h-3.5">
+                   <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                 </svg>}
+                {statusFilter === "PRESENT" ? "Present" : "Absent"}
+                <button onClick={() => setStatusFilter("")} className="ml-1 hover:bg-primary/20 rounded p-0.5 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+            )}
+            {classFilter && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-3.5 h-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                </svg>
+                Class: {(classes ?? []).find(c => c.id === classFilter)?.name ?? "Unknown"}
+                <button onClick={() => setClassFilter("")} className="ml-1 hover:bg-primary/20 rounded p-0.5 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+            )}
+            <button 
+              onClick={() => { setSearch(""); setStatusFilter(""); setClassFilter(""); }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-medium transition-colors"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Table */}
       {!filtered.length && !loading ? (
         <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-12 text-center">
-          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center"><CheckCircle className="w-7 h-7 text-primary/40" /></div>
-          <p className="text-sm font-medium text-text-muted">No attendance records found</p>
-          <p className="text-xs text-text-muted mt-1">Scan student QR codes to mark attendance</p>
+          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center">
+            {search.trim() || statusFilter || classFilter ? (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-7 h-7 text-primary/40">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+            ) : (
+              <CheckCircle className="w-7 h-7 text-primary/40" />
+            )}
+          </div>
+          <p className="text-sm font-medium text-text-muted">
+            {search.trim() || statusFilter || classFilter 
+              ? "No attendance records match your filters" 
+              : "No attendance records found"}
+          </p>
+          <p className="text-xs text-text-muted mt-1">
+            {search.trim() || statusFilter || classFilter 
+              ? "Try adjusting your search or filter criteria" 
+              : "Scan student QR codes to mark attendance"}
+          </p>
+          {(search.trim() || statusFilter || classFilter) && (
+            <button 
+              onClick={() => { setSearch(""); setStatusFilter(""); setClassFilter(""); }}
+              className="mt-3 px-4 py-2 bg-primary text-white text-sm font-medium rounded-xl hover:bg-primary-dark transition-colors"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-bg-card rounded-2xl shadow-sm border border-border overflow-hidden">

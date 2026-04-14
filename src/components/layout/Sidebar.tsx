@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, Users, BookOpen, ScanLine, Calendar, CalendarDays, X, CheckSquare, Settings, LogOut,
+  LayoutDashboard, Users, BookOpen, ScanLine, Calendar, CalendarDays, X, CheckSquare, Settings, LogOut, CreditCard,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -20,6 +20,7 @@ const navItems = [
   { href: "/schedule", label: "Schedule", icon: Calendar },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/attendance", label: "Attendance", icon: CheckSquare },
+  { href: "/billing", label: "Billing", icon: CreditCard },
   { href: "/scanner", label: "Scanner", icon: ScanLine },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
