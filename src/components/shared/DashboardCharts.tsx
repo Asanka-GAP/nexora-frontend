@@ -17,12 +17,18 @@ const toStr = (d: Date) =>
 const monday = (d: Date) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); return r; };
 const sunday = (m: Date) => { const r = new Date(m); r.setDate(r.getDate() + 6); return r; };
 
-const ChartTooltip = ({ active, payload, label, dark }: { active?: boolean; payload?: { value: number }[]; label?: string; dark?: boolean }) => {
+const ChartTooltip = ({ active, payload, label, dark }: { active?: boolean; payload?: { value: number; dataKey: string }[]; label?: string; dark?: boolean }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className={`backdrop-blur-sm rounded-2xl shadow-xl px-4 py-3 text-xs border ${dark ? "bg-[#1E293B]/95 border-[#334155]" : "bg-white/95 border-transparent"}`}>
-      <p className={`font-semibold mb-1 ${dark ? "text-slate-300" : "text-slate-500"}`}>{label}</p>
-      <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#4F46E5]" /><span className="text-slate-400">Attendance:</span><span className={`font-bold ${dark ? "text-white" : "text-slate-700"}`}>{payload[0].value}</span></div>
+      <p className={`font-semibold mb-1.5 ${dark ? "text-slate-300" : "text-slate-500"}`}>{label}</p>
+      {payload.map(p => (
+        <div key={p.dataKey} className="flex items-center gap-2 mb-0.5">
+          <span className={`w-2 h-2 rounded-full ${p.dataKey === "absent" ? "bg-red-500" : "bg-[#4F46E5]"}`} />
+          <span className="text-slate-400">{p.dataKey === "absent" ? "Absent" : "Present"}:</span>
+          <span className={`font-bold ${dark ? "text-white" : "text-slate-700"}`}>{p.value}</span>
+        </div>
+      ))}
     </div>
   );
 };
@@ -51,7 +57,7 @@ const BarTooltip = ({ active, payload, dark }: { active?: boolean; payload?: { v
 interface DashboardChartsProps {
   classes: { id: string; name: string; grade?: number; studentCount?: number }[] | null;
   chartSummary: { classOverview: { name: string; fullName: string; students: number }[]; gradeDistribution: { grade: string; gradeNum: number; count: number }[]; totalStudents: number } | null;
-  chartRecords: { date: string }[] | null;
+  chartRecords: { date: string; status?: string }[] | null;
   chartLoading: boolean;
   chartSummaryLoading: boolean;
   chartFrom: string;
@@ -83,10 +89,18 @@ export default function DashboardCharts({
 
   const chartData = useMemo(() => {
     if (!chartRecords) return [];
-    const map: Record<string, number> = {};
-    for (let d = new Date(chartFrom + "T00:00:00"); d <= new Date(chartTo + "T00:00:00"); d.setDate(d.getDate() + 1)) map[toStr(d)] = 0;
-    chartRecords.forEach(r => { map[r.date] = (map[r.date] ?? 0) + 1; });
-    return Object.entries(map).map(([date, count]) => ({ date: new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }), count }));
+    const presentMap: Record<string, number> = {};
+    const absentMap: Record<string, number> = {};
+    for (let d = new Date(chartFrom + "T00:00:00"); d <= new Date(chartTo + "T00:00:00"); d.setDate(d.getDate() + 1)) { const k = toStr(d); presentMap[k] = 0; absentMap[k] = 0; }
+    chartRecords.forEach(r => {
+      if (r.status === "ABSENT") absentMap[r.date] = (absentMap[r.date] ?? 0) + 1;
+      else presentMap[r.date] = (presentMap[r.date] ?? 0) + 1;
+    });
+    return Object.keys(presentMap).map(date => ({
+      date: new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      present: presentMap[date],
+      absent: absentMap[date],
+    }));
   }, [chartRecords, chartFrom, chartTo]);
 
   const applyPreset = (p: string) => {
@@ -189,14 +203,21 @@ export default function DashboardCharts({
                       <stop offset="0%" stopColor="#4F46E5" stopOpacity={0.3} />
                       <stop offset="100%" stopColor="#4F46E5" stopOpacity={0.05} />
                     </linearGradient>
+                    <linearGradient id="absentGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#EF4444" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#EF4444" stopOpacity={0.02} />
+                    </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={grid} strokeOpacity={0.5} />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: tick, fontWeight: "500" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: tick, fontWeight: "500" }} axisLine={false} tickLine={false} width={32} allowDecimals={false} />
                   <Tooltip content={<ChartTooltip dark={dk} />} />
-                  <Area type="monotone" dataKey="count" stroke="#4F46E5" strokeWidth={3} fill="url(#attendGrad)"
-                    dot={{ r: 5, fill: "#4F46E5", strokeWidth: 3, stroke: dotBg }}
-                    activeDot={{ r: 7, stroke: "#4F46E5", strokeWidth: 3, fill: dotBg }} />
+                  <Area type="monotone" dataKey="present" stroke="#4F46E5" strokeWidth={3} fill="url(#attendGrad)"
+                    dot={{ r: 4, fill: "#4F46E5", strokeWidth: 2, stroke: dotBg }}
+                    activeDot={{ r: 6, stroke: "#4F46E5", strokeWidth: 2, fill: dotBg }} />
+                  <Area type="monotone" dataKey="absent" stroke="#EF4444" strokeWidth={2} fill="url(#absentGrad)"
+                    dot={{ r: 3, fill: "#EF4444", strokeWidth: 2, stroke: dotBg }}
+                    activeDot={{ r: 5, stroke: "#EF4444", strokeWidth: 2, fill: dotBg }} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (

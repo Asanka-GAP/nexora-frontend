@@ -214,7 +214,7 @@ export default function AttendancePage() {
                     <td className="px-5 py-3.5"><span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-secondary/15 text-cyan-800">{r.className}</span></td>
                     <td className="px-5 py-3.5 text-sm text-text-muted">{new Date(r.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</td>
                     <td className="px-5 py-3.5 text-sm text-text-muted">{r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
-                    <td className="px-5 py-3.5"><span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-700">{r.status}</span></td>
+                    <td className="px-5 py-3.5"><span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${r.status === "ABSENT" ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>{r.status}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -226,11 +226,11 @@ export default function AttendancePage() {
             {paginated.map((r, i) => (
               <div key={r.id} className={`p-4 ${i % 2 === 0 ? "bg-bg-card" : "bg-bg/60"} ${i < paginated.length - 1 ? "border-b-2 border-border/80" : ""}`}>
                 <div className="flex gap-3">
-                  <div className="w-1 rounded-full flex-shrink-0 bg-success" />
+                  <div className="w-1 rounded-full flex-shrink-0" style={{ backgroundColor: r.status === "ABSENT" ? "var(--color-danger, #ef4444)" : "var(--color-success, #10b981)" }} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div><p className="font-semibold text-text text-sm truncate">{r.studentName}</p><p className="text-[10px] text-text-muted font-mono">{r.studentCode}</p></div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 bg-emerald-100 text-emerald-700">{r.status}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${r.status === "ABSENT" ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>{r.status}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Class</p><p className="text-xs font-medium text-text mt-0.5 truncate">{r.className}</p></div>

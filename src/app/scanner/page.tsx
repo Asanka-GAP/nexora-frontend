@@ -2,12 +2,13 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Camera, CameraOff, CheckCircle2, ChevronDown, XCircle, Clock } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, CheckCircle2, ChevronDown, XCircle, Clock, WifiOff, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
 import { markAttendance, getClasses } from "@/services/api";
 import type { ClassItem } from "@/lib/types";
 import jsQR from "jsqr";
+import { loadTodayCache, saveTodayCache, getOfflineQueue, addToOfflineQueue, clearOfflineQueue } from "@/lib/offlineScan";
 
 const DUPLICATE_COOLDOWN = 4000;
 interface ScanRecord { name: string; code: string; time: string; success: boolean; message?: string; }
@@ -25,6 +26,9 @@ export default function ScannerPage() {
   const lastScanRef = useRef<{ code: string; time: number }>({ code: "", time: 0 });
   const markedTodayRef = useRef<Set<string>>(new Set());
   const mountedRef = useRef(true);
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
 
   const [scanning, setScanning] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -44,6 +48,44 @@ export default function ScannerPage() {
     setScanFeedback(fb);
     feedbackTimer.current = setTimeout(() => setScanFeedback(null), 1200);
   }, []);
+
+  // Load persisted today cache + offline queue count on mount
+  useEffect(() => {
+    markedTodayRef.current = loadTodayCache();
+    setPendingCount(getOfflineQueue().length);
+  }, []);
+
+  // Online/offline detection
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    setIsOnline(navigator.onLine);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
+  }, []);
+
+  // Auto-sync when back online
+  const syncOfflineQueue = useCallback(async () => {
+    const queue = getOfflineQueue();
+    if (!queue.length || syncing) return;
+    setSyncing(true);
+    let synced = 0;
+    for (const scan of queue) {
+      try {
+        await markAttendance({ studentCode: scan.studentCode, classId: scan.classId });
+        synced++;
+      } catch {}
+    }
+    clearOfflineQueue();
+    setPendingCount(0);
+    setSyncing(false);
+    if (synced > 0) toast.success(`Synced ${synced} offline scan${synced > 1 ? "s" : ""}`);
+  }, [syncing]);
+
+  useEffect(() => {
+    if (isOnline) syncOfflineQueue();
+  }, [isOnline, syncOfflineQueue]);
 
   const filteredClasses = classes.filter(c => {
     if (!classSearch.trim()) return true;
@@ -65,15 +107,31 @@ export default function ScannerPage() {
       showFeedback({ type: "error", name: "", message: "" });
       return;
     }
+
+    if (!navigator.onLine) {
+      // Offline: queue + cache + green
+      playBeep();
+      addToOfflineQueue({ studentCode: decodedText, classId: selectedClassRef.current, scannedAt: new Date().toISOString() });
+      markedTodayRef.current.add(cacheKey);
+      saveTodayCache(markedTodayRef.current);
+      setPendingCount(getOfflineQueue().length);
+      setRecentScans(prev => [{ name: decodedText, code: decodedText, time, success: true, message: "Queued offline" }, ...prev].slice(0, 8));
+      setScanPage(0);
+      showFeedback({ type: "success", name: "", message: "" });
+      return;
+    }
+
+    // Online: call API
     playBeep();
     markAttendance({ studentCode: decodedText, classId: selectedClassRef.current }).then(res => {
       markedTodayRef.current.add(cacheKey);
+      saveTodayCache(markedTodayRef.current);
       setRecentScans(prev => [{ name: res.studentName, code: decodedText, time, success: true }, ...prev].slice(0, 8));
       setScanPage(0);
       showFeedback({ type: "success", name: "", message: "" });
     }).catch((err: unknown) => {
       const msg = err && typeof err === "object" && "response" in err ? ((err as { response?: { data?: { message?: string } } }).response?.data?.message ?? "Scan failed") : "Scan failed";
-      if (msg.includes("already marked")) markedTodayRef.current.add(cacheKey);
+      if (msg.includes("already marked")) { markedTodayRef.current.add(cacheKey); saveTodayCache(markedTodayRef.current); }
       playError();
       setRecentScans(prev => [{ name: "", code: decodedText, time, success: false, message: msg }, ...prev].slice(0, 8));
       setScanPage(0);
@@ -155,6 +213,18 @@ export default function ScannerPage() {
             <span className="text-sm font-bold text-primary">{successCount}</span>
           </div>
           {scanning && <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-success animate-pulse" /><span className="text-xs font-medium text-success">Live</span></div>}
+          {!isOnline && (
+            <div className="flex items-center gap-1.5 bg-amber-500/10 rounded-xl px-2.5 py-1.5">
+              <WifiOff className="h-3.5 w-3.5 text-amber-600" />
+              <span className="text-[10px] font-bold text-amber-600">Offline</span>
+            </div>
+          )}
+          {pendingCount > 0 && (
+            <div className="flex items-center gap-1.5 bg-amber-500/10 rounded-xl px-2.5 py-1.5">
+              {syncing ? <Loader2 className="h-3.5 w-3.5 text-amber-600 animate-spin" /> : <Clock className="h-3.5 w-3.5 text-amber-600" />}
+              <span className="text-[10px] font-bold text-amber-600">{pendingCount} pending</span>
+            </div>
+          )}
         </div>
       </div>
 

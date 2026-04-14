@@ -1,7 +1,7 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Users, UserPlus, Phone, QrCode, Download, Printer, GraduationCap, MapPin, BookOpen, User, Search, X, ChevronDown, UserCheck, UserX, Layers, CalendarCheck } from "lucide-react";
+import { Plus, Trash2, Pencil, Users, UserPlus, Phone, QrCode, Download, Printer, GraduationCap, MapPin, BookOpen, User, Search, X, ChevronDown, UserCheck, UserX, Layers, CalendarCheck, Upload } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { toPng } from "html-to-image";
@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useFetch } from "@/hooks/useFetch";
-import { getStudents, getClasses, createStudent, updateStudent, deleteStudentApi, toggleStudentStatus, addStudentContact, deleteStudentContact } from "@/services/api";
+import { getStudents, getClasses, createStudent, updateStudent, deleteStudentApi, toggleStudentStatus, addStudentContact, deleteStudentContact, bulkImportStudents } from "@/services/api";
 import type { Student, ClassItem } from "@/lib/types";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 import AttendanceDrawer from "@/components/students/AttendanceDrawer";
@@ -59,6 +59,14 @@ export default function StudentsPage() {
   const [qrStudent, setQrStudent] = useState<Student | null>(null);
   // Attendance History
   const [attendanceStudent, setAttendanceStudent] = useState<Student | null>(null);
+  // Bulk ID Cards
+  const [bulkCardsPrinting, setBulkCardsPrinting] = useState(false);
+
+  // Bulk Import
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [csvRows, setCsvRows] = useState<{ fullName: string; currentGrade: number; address: string; parentName: string; parentPhone: string; parentRelationship: string }[]>([]);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ total: number; success: number; failed: number; errors: string[] } | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [qrLoading, setQrLoading] = useState(false);
 
@@ -105,17 +113,25 @@ export default function StudentsPage() {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
     printWindow.document.write(`<html><head><title>Student ID - ${qrStudent.studentCode}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+${cardPrintStyles()}
+</head><body>
+${cardHtml(qrStudent, qrDataUrl)}
+</body></html>`);
+    printWindow.document.close();
+    printWindow.onload = () => { setTimeout(() => { printWindow.print(); printWindow.close(); }, 500); };
+  };
+
+  const cardPrintStyles = () => `<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 @page { size: 85.6mm 54mm; margin: 0; }
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; letter-spacing: -0.01em; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fff; }
-.card { width: 85.6mm; height: 54mm; background: #fff; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #e2e8f0; }
+body { background: #fff; }
+.card { width: 85.6mm; height: 54mm; background: #fff; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #e2e8f0; page-break-after: always; page-break-inside: avoid; }
 .header { background: linear-gradient(135deg, #4F46E5, #3730A3); padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; }
 .header-title { color: #fff; font-weight: 700; font-size: 15px; line-height: 1.2; }
 .header-sub { color: rgba(255,255,255,0.7); font-size: 8px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
 .header-logo { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 14px; }
-.body { padding: 10px 16px; display: flex; gap: 14px; }
+.body { padding: 10px 16px; display: flex; gap: 14px; flex: 1; }
 .info { flex: 1; }
 .label { font-size: 8px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 1px; }
 .name { font-size: 16px; font-weight: 700; color: #1e293b; line-height: 1.3; }
@@ -130,37 +146,38 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
 .footer { padding: 5px 16px; background: #f8fafc; border-top: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
 .footer-text { font-size: 7px; color: #94a3b8; }
 .footer-brand { font-size: 7px; color: #94a3b8; font-weight: 600; }
-</style></head><body>
-<div class="card">
-  <div class="header">
-    <div><div class="header-title">Nexora</div><div class="header-sub">Student Identity Card</div></div>
-    <div class="header-logo">N</div>
-  </div>
-  <div class="body">
-    <div class="info">
-      <div class="label">Student Name</div>
-      <div class="name">${qrStudent.fullName}</div>
-      <div class="divider"></div>
-      <div class="grid">
-        <div><div class="label">Student ID</div><div class="value-id">${qrStudent.studentCode}</div></div>
-        <div><div class="label">Enrolled</div><div class="value">${new Date(qrStudent.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div></div>
-        <div><div class="label">Teacher</div><div class="value">${user?.name ?? "—"}</div></div>
-        <div><div class="label">Subject</div><div class="value">${user?.subject ?? "—"}</div></div>
-      </div>
+</style>`;
+
+  const cardHtml = (s: Student, qrUrl: string) => `<div class="card">
+  <div class="header"><div><div class="header-title">Nexora</div><div class="header-sub">Student Identity Card</div></div><div class="header-logo">N</div></div>
+  <div class="body"><div class="info">
+    <div class="label">Student Name</div><div class="name">${s.fullName}</div><div class="divider"></div>
+    <div class="grid">
+      <div><div class="label">Student ID</div><div class="value-id">${s.studentCode}</div></div>
+      <div><div class="label">Enrolled</div><div class="value">${new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div></div>
+      <div><div class="label">Teacher</div><div class="value">${user?.name ?? "\u2014"}</div></div>
+      <div><div class="label">Subject</div><div class="value">${user?.subject ?? "\u2014"}</div></div>
     </div>
-    <div class="qr-wrap">
-      <div class="qr-border"><img src="${qrDataUrl}" alt="QR" /></div>
-      <div class="qr-text">Scan for attendance</div>
-    </div>
-  </div>
-  <div class="footer">
-    <div class="footer-text">Valid throughout student's enrollment</div>
-    <div class="footer-brand">nexora.app</div>
-  </div>
-</div>
-</body></html>`);
-    printWindow.document.close();
-    printWindow.onload = () => { setTimeout(() => { printWindow.print(); printWindow.close(); }, 500); };
+  </div><div class="qr-wrap"><div class="qr-border"><img src="${qrUrl}" alt="QR" /></div><div class="qr-text">Scan for attendance</div></div></div>
+  <div class="footer"><div class="footer-text">Valid throughout student's enrollment</div><div class="footer-brand">nexora.app</div></div>
+</div>`;
+
+  const printBulkCards = async () => {
+    const activeStudents = filtered.filter(s => s.isActive);
+    if (!activeStudents.length) { toast.error("No active students to print"); return; }
+    setBulkCardsPrinting(true);
+    try {
+      const qrUrls = await Promise.all(
+        activeStudents.map(s => QRCode.toDataURL(s.studentCode, { width: 200, margin: 1, color: { dark: "#111827", light: "#ffffff" } }))
+      );
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) { toast.error("Popup blocked"); return; }
+      const cards = activeStudents.map((s, i) => cardHtml(s, qrUrls[i])).join("\n");
+      printWindow.document.write(`<html><head><title>Bulk ID Cards - ${activeStudents.length} Students</title>${cardPrintStyles()}</head><body>${cards}</body></html>`);
+      printWindow.document.close();
+      printWindow.onload = () => { setTimeout(() => { printWindow.print(); printWindow.close(); }, 800); };
+    } catch { toast.error("Failed to generate cards"); }
+    finally { setBulkCardsPrinting(false); }
   };
 
   useEffect(() => { setPage(1); }, [search, filterGrade, filterStatus]);
@@ -269,7 +286,11 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
     <>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div><h2 className="text-lg font-semibold text-text">All Students</h2><p className="text-xs text-text-muted mt-0.5">{all.length} students total</p></div>
-        <Button onClick={openCreate}><Plus className="h-4 w-4" /> Add Student</Button>
+        <div className="grid grid-cols-3 sm:flex sm:items-center gap-2">
+          <Button variant="outline" size="sm" onClick={printBulkCards} loading={bulkCardsPrinting} className="text-xs"><Printer className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Print Cards</span><span className="sm:hidden">Cards</span></Button>
+          <Button variant="outline" size="sm" onClick={() => { setBulkOpen(true); setCsvRows([]); setBulkResult(null); }} className="text-xs"><Upload className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Import CSV</span><span className="sm:hidden">Import</span></Button>
+          <Button size="sm" onClick={openCreate} className="text-xs"><Plus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Add Student</span><span className="sm:hidden">Add</span></Button>
+        </div>
       </div>
 
       {/* Stat Cards */}
@@ -943,6 +964,183 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
 
       {/* Attendance History Drawer */}
       <AttendanceDrawer student={attendanceStudent} onClose={() => setAttendanceStudent(null)} />
+
+      {/* Bulk Import Modal */}
+      <Modal open={bulkOpen} onClose={() => setBulkOpen(false)} title="" className="max-w-2xl p-0 !mx-2 sm:!mx-auto">
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-4 sm:px-6 py-5 rounded-t-2xl">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center"><Upload className="w-5 h-5 text-white" /></div>
+            <div>
+              <h2 className="text-white font-semibold text-base">Bulk Import Students</h2>
+              <p className="text-white/60 text-xs mt-0.5">Upload a CSV file to add multiple students at once</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-4 max-h-[60vh] overflow-y-auto">
+          {!bulkResult ? (
+            <>
+              {/* CSV Format Info */}
+              <div className="rounded-xl border border-border bg-bg p-4">
+                <p className="text-xs font-semibold text-text mb-2">CSV Format (columns in order):</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {["Full Name *", "Grade *", "Address", "Parent Name", "Parent Phone", "Parent Relationship"].map(col => (
+                    <span key={col} className={`text-[10px] font-semibold px-2 py-1 rounded-md ${col.includes("*") ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-600"}`}>{col}</span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-text-muted mt-2">First row should be headers. * = required fields.</p>
+                <div className="mt-3 rounded-lg border border-border overflow-x-auto">
+                  <table className="w-full text-[10px]" style={{ minWidth: 420 }}>
+                    <thead><tr className="bg-bg">
+                      {["Full Name", "Grade", "Address", "Parent Name", "Parent Phone", "Relationship"].map(h => (
+                        <th key={h} className="px-2 py-1.5 text-left font-semibold text-text-muted">{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody className="text-text-muted">
+                      <tr className="border-t border-border/50"><td className="px-2 py-1">Kasun Perera</td><td className="px-2 py-1">6</td><td className="px-2 py-1">123 Main St</td><td className="px-2 py-1">Nimal Perera</td><td className="px-2 py-1">+94771234567</td><td className="px-2 py-1">Father</td></tr>
+                      <tr className="border-t border-border/50"><td className="px-2 py-1">Amaya Silva</td><td className="px-2 py-1">7</td><td className="px-2 py-1"></td><td className="px-2 py-1">Kumari Silva</td><td className="px-2 py-1">+94779876543</td><td className="px-2 py-1">Mother</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* File Upload */}
+              {csvRows.length === 0 ? (
+                <label
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add("border-primary", "bg-primary/5"); }}
+                  onDragLeave={e => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove("border-primary", "bg-primary/5"); }}
+                  onDrop={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    e.currentTarget.classList.remove("border-primary", "bg-primary/5");
+                    const file = e.dataTransfer.files?.[0];
+                    if (!file || !file.name.endsWith(".csv")) { toast.error("Please drop a CSV file"); return; }
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const text = ev.target?.result as string;
+                      const lines = text.split(/\r?\n/).filter(l => l.trim());
+                      if (lines.length < 1) { toast.error("CSV file is empty"); return; }
+                      const firstCols = lines[0].split(",").map(c => c.trim().replace(/^"|"$/g, "").toLowerCase());
+                      const hasHeaders = isNaN(Number(firstCols[1])) || firstCols[0].includes("name") || firstCols[1].includes("grade");
+                      const dataLines = hasHeaders ? lines.slice(1) : lines;
+                      const rows = dataLines.map(line => {
+                        const cols = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+                        return { fullName: cols[0] || "", currentGrade: parseInt(cols[1]) || 0, address: cols[2] || "", parentName: cols[3] || "", parentPhone: cols[4] || "", parentRelationship: cols[5] || "Parent" };
+                      }).filter(r => r.fullName);
+                      if (!rows.length) { toast.error("No valid rows found"); return; }
+                      setCsvRows(rows);
+                    };
+                    reader.readAsText(file);
+                  }}
+                  className="flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-primary/[0.02] transition-all cursor-pointer">
+                  <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center"><Upload className="w-7 h-7 text-primary/60" /></div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-text">Click to upload CSV</p>
+                    <p className="text-xs text-text-muted mt-0.5">or drag and drop</p>
+                  </div>
+                  <input type="file" accept=".csv" className="hidden" onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const text = ev.target?.result as string;
+                      const lines = text.split(/\r?\n/).filter(l => l.trim());
+                      if (lines.length < 1) { toast.error("CSV file is empty"); return; }
+                      // Check if first row looks like headers (contains non-numeric text in grade column)
+                      const firstCols = lines[0].split(",").map(c => c.trim().replace(/^"|"$/g, "").toLowerCase());
+                      const hasHeaders = isNaN(Number(firstCols[1])) || firstCols[0].includes("name") || firstCols[1].includes("grade");
+                      const dataLines = hasHeaders ? lines.slice(1) : lines;
+                      const rows = dataLines.map(line => {
+                        const cols = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+                        return {
+                          fullName: cols[0] || "",
+                          currentGrade: parseInt(cols[1]) || 0,
+                          address: cols[2] || "",
+                          parentName: cols[3] || "",
+                          parentPhone: cols[4] || "",
+                          parentRelationship: cols[5] || "Parent",
+                        };
+                      }).filter(r => r.fullName);
+                      if (!rows.length) { toast.error("No valid rows found"); return; }
+                      setCsvRows(rows);
+                    };
+                    reader.readAsText(file);
+                    e.target.value = "";
+                  }} />
+                </label>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-text">{csvRows.length} students ready to import</p>
+                    <button onClick={() => setCsvRows([])} className="text-xs font-semibold text-danger hover:underline">Clear</button>
+                  </div>
+                  <div className="rounded-xl border border-border overflow-hidden -mx-1 sm:mx-0">
+                    <div className="overflow-x-auto max-h-[250px] overflow-y-auto">
+                      <table className="w-full text-xs" style={{ minWidth: 500 }}>
+                        <thead><tr className="bg-bg border-b border-border">
+                          {["#", "Name", "Grade", "Address", "Parent", "Phone", "Rel."].map(h => (
+                            <th key={h} className="px-2 py-2 text-left font-semibold text-text-muted whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr></thead>
+                        <tbody>
+                          {csvRows.map((r, i) => (
+                            <tr key={i} className={`border-b border-border/50 ${!r.fullName || !r.currentGrade ? "bg-red-50" : ""}`}>
+                              <td className="px-2 py-1.5 text-text-muted">{i + 1}</td>
+                              <td className="px-2 py-1.5 font-medium text-text whitespace-nowrap">{r.fullName || <span className="text-danger">Missing</span>}</td>
+                              <td className="px-2 py-1.5">{r.currentGrade || <span className="text-danger">—</span>}</td>
+                              <td className="px-2 py-1.5 text-text-muted max-w-[100px] truncate">{r.address || "—"}</td>
+                              <td className="px-2 py-1.5 text-text-muted whitespace-nowrap">{r.parentName || "—"}</td>
+                              <td className="px-2 py-1.5 text-text-muted whitespace-nowrap">{r.parentPhone || "—"}</td>
+                              <td className="px-2 py-1.5 text-text-muted">{r.parentRelationship || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            /* Import Result */
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                  <UserCheck className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-emerald-800">{bulkResult.success} of {bulkResult.total} imported</p>
+                  <p className="text-xs text-emerald-600">{bulkResult.failed > 0 ? `${bulkResult.failed} failed` : "All students imported successfully"}</p>
+                </div>
+              </div>
+              {bulkResult.errors.length > 0 && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                  <p className="text-xs font-semibold text-red-700 mb-2">Errors:</p>
+                  <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                    {bulkResult.errors.map((err, i) => (
+                      <p key={i} className="text-xs text-red-600">• {err}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-bg/40">
+          <Button variant="ghost" onClick={() => setBulkOpen(false)}>{bulkResult ? "Close" : "Cancel"}</Button>
+          {!bulkResult && csvRows.length > 0 && (
+            <Button loading={bulkImporting} onClick={async () => {
+              setBulkImporting(true);
+              try {
+                const result = await bulkImportStudents({ students: csvRows });
+                setBulkResult(result);
+                refetch();
+              } catch { toast.error("Import failed"); }
+              finally { setBulkImporting(false); }
+            }}><Upload className="h-4 w-4" /> Import {csvRows.length} Students</Button>
+          )}
+        </div>
+      </Modal>
 
       {/* Delete Confirmation */}
       {deleteTarget && (
