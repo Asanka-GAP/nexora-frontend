@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Calendar, XCircle, RotateCcw, CheckCircle, Clock, BarChart3, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
-import { getSchedules, cancelSchedule, reactivateSchedule } from "@/services/api";
+import { getSchedules, cancelSchedule, reactivateSchedule, getTeacherProfile } from "@/services/api";
 import type { Schedule } from "@/lib/types";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 import DatePicker from "@/components/shared/DatePicker";
@@ -54,6 +54,10 @@ export default function SchedulePage() {
   const [reactivateNote, setReactivateNote] = useState("");
   const [reactivating, setReactivating] = useState(false);
 
+  const fetchProfile = useCallback(() => getTeacherProfile(), []);
+  const { data: profile } = useFetch(fetchProfile);
+  const smsEnabled = profile?.smsNotificationsEnabled ?? false;
+
   useEffect(() => { setPage(1); }, [statusFilter, dateFrom, dateTo, search]);
 
   const all = sessions ?? [];
@@ -88,6 +92,7 @@ export default function SchedulePage() {
 
   const handleReactivate = async () => {
     if (!reactivateTarget) return;
+    if (smsEnabled && !reactivateNote.trim()) { toast.error("A note is required when SMS notifications are enabled"); return; }
     setReactivating(true);
     try { await reactivateSchedule(reactivateTarget.id, reactivateNote || undefined); toast.success("Session reactivated"); setReactivateTarget(null); setReactivateNote(""); refetch(); refetchStats(); }
     catch (err: unknown) { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Failed to reactivate"); }
@@ -96,6 +101,7 @@ export default function SchedulePage() {
 
   const handleCancel = async () => {
     if (!cancelTarget) return;
+    if (smsEnabled && !cancelReason.trim()) { toast.error("A note is required when SMS notifications are enabled"); return; }
     setCancelling(true);
     try { await cancelSchedule(cancelTarget.id, cancelReason || undefined); toast.success("Session cancelled"); setCancelTarget(null); setCancelReason(""); refetch(); refetchStats(); }
     catch (err: unknown) { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Failed to cancel"); }
@@ -291,7 +297,7 @@ export default function SchedulePage() {
             <div className="w-12 h-12 rounded-2xl bg-danger/10 flex items-center justify-center mx-auto mb-4"><XCircle className="w-6 h-6 text-danger" /></div>
             <h3 className="text-base font-semibold text-text text-center">Cancel Session</h3>
             <p className="text-sm text-text-muted text-center mt-1">{cancelTarget.className} — {new Date(cancelTarget.sessionDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
-            <div className="mt-4"><label className="block text-sm font-medium text-text mb-1">Reason (optional)</label><input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="e.g. Teacher unavailable" className="w-full rounded-xl border border-border bg-bg-card px-4 py-2.5 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            <div className="mt-4"><label className="block text-sm font-medium text-text mb-1">Reason {smsEnabled ? <span className="text-danger">*</span> : <span className="text-text-muted font-normal">(optional)</span>}</label><input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="e.g. Teacher unavailable" className="w-full rounded-xl border border-border bg-bg-card px-4 py-2.5 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50" />{smsEnabled && <p className="text-[10px] text-primary mt-1.5">SMS will be sent to enrolled students&apos; parents with this note</p>}</div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => { setCancelTarget(null); setCancelReason(""); }} className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-text hover:bg-bg transition-all">Keep</button>
               <button onClick={handleCancel} disabled={cancelling} className="flex-1 h-10 rounded-xl text-sm font-semibold text-white bg-danger hover:bg-danger/90 transition-all disabled:opacity-60">{cancelling ? "Cancelling..." : "Cancel Session"}</button>
@@ -308,7 +314,7 @@ export default function SchedulePage() {
             <div className="w-12 h-12 rounded-2xl bg-success/10 flex items-center justify-center mx-auto mb-4"><RotateCcw className="w-6 h-6 text-success" /></div>
             <h3 className="text-base font-semibold text-text text-center">Reactivate Session</h3>
             <p className="text-sm text-text-muted text-center mt-1">{reactivateTarget.className} — {new Date(reactivateTarget.sessionDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
-            <div className="mt-4"><label className="block text-sm font-medium text-text mb-1">Note (optional)</label><input value={reactivateNote} onChange={e => setReactivateNote(e.target.value)} placeholder="e.g. Rescheduled, teacher available" className="w-full rounded-xl border border-border bg-bg-card px-4 py-2.5 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            <div className="mt-4"><label className="block text-sm font-medium text-text mb-1">Note {smsEnabled ? <span className="text-danger">*</span> : <span className="text-text-muted font-normal">(optional)</span>}</label><input value={reactivateNote} onChange={e => setReactivateNote(e.target.value)} placeholder="e.g. Rescheduled, teacher available" className="w-full rounded-xl border border-border bg-bg-card px-4 py-2.5 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50" />{smsEnabled && <p className="text-[10px] text-primary mt-1.5">SMS will be sent to enrolled students&apos; parents with this note</p>}</div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => { setReactivateTarget(null); setReactivateNote(""); }} className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-text hover:bg-bg transition-all">Cancel</button>
               <button onClick={handleReactivate} disabled={reactivating} className="flex-1 h-10 rounded-xl text-sm font-semibold text-white bg-success hover:bg-success/90 transition-all disabled:opacity-60">{reactivating ? "Reactivating..." : "Reactivate"}</button>

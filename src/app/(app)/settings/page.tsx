@@ -1,13 +1,14 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen, Calendar, GraduationCap, Sun, Moon, Monitor, MessageSquare } from "lucide-react";
+import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen, Calendar, GraduationCap, Sun, Moon, Monitor, MessageSquare, Undo2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
 import DatePicker from "@/components/shared/DatePicker";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useFetch } from "@/hooks/useFetch";
-import { getTeacherProfile, updateTeacherProfile, changeTeacherPassword, sendEmailOtp, changeTeacherEmail, getAcademicYearConfig, updateAcademicYearConfig, updateSmsSettings } from "@/services/api";
+import { getTeacherProfile, updateTeacherProfile, changeTeacherPassword, sendEmailOtp, changeTeacherEmail, getAcademicYearConfig, updateAcademicYearConfig, updateSmsSettings, getSmsTemplate, updateSmsTemplate, previewSmsTemplate, getSmsAbsentTemplate, updateSmsAbsentTemplate, previewSmsAbsentTemplate } from "@/services/api";
+import type { SmsTemplateData } from "@/services/api";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 
 type Tab = "profile" | "password" | "sms" | "appearance" | "academic";
@@ -59,6 +60,45 @@ export default function SettingsPage() {
   const [smsNotificationsEnabled, setSmsNotificationsEnabled] = useState(true);
   const [smsSaving, setSmsSaving] = useState(false);
   const [smsMsg, setSmsMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [smsTemplate, setSmsTemplate] = useState("");
+  const [smsPreview, setSmsPreview] = useState<SmsTemplateData | null>(null);
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [absentTemplate, setAbsentTemplate] = useState("");
+  const [absentPreview, setAbsentPreview] = useState<SmsTemplateData | null>(null);
+  const [absentTemplateSaving, setAbsentTemplateSaving] = useState(false);
+  const absentPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Dirty state detection
+  const profileDirty = profile ? (name !== (profile.name ?? "") || phone !== (profile.phone ?? "") || subject !== (profile.subject ?? "")) : false;
+  const passwordDirty = !!(currentPassword || newPassword || confirmPassword);
+  const smsDirty = profile ? smsNotificationsEnabled !== (profile.smsNotificationsEnabled ?? true) : false;
+  const smsTemplateDirty = smsPreview ? smsTemplate !== smsPreview.template : false;
+  const absentTemplateDirty = absentPreview ? absentTemplate !== absentPreview.template : false;
+  const academicDirty = academicConfig ? nextUpgradeDate !== (academicConfig.nextUpgradeDate ?? "") : false;
+  const anyDirty = profileDirty || passwordDirty || smsDirty || smsTemplateDirty || absentTemplateDirty || academicDirty;
+
+  const currentTabDirty = tab === "profile" ? profileDirty
+    : tab === "password" ? passwordDirty
+    : tab === "sms" ? (smsDirty || smsTemplateDirty || absentTemplateDirty)
+    : tab === "academic" ? academicDirty
+    : false;
+
+  // Browser beforeunload warning
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { if (anyDirty) { e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [anyDirty]);
+
+  const discardChanges = () => {
+    if (profile) { setName(profile.name ?? ""); setPhone(profile.phone ?? ""); setSubject(profile.subject ?? ""); setEmail(profile.email ?? ""); setSmsNotificationsEnabled(profile.smsNotificationsEnabled ?? true); }
+    setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+    if (academicConfig) setNextUpgradeDate(academicConfig.nextUpgradeDate ?? "");
+    if (smsPreview) setSmsTemplate(smsPreview.template);
+    if (absentPreview) setAbsentTemplate(absentPreview.template);
+    setProfileMsg(null); setPwMsg(null); setSmsMsg(null); setAcademicMsg(null);
+  };
 
   useEffect(() => {
     if (profile) {
@@ -69,6 +109,20 @@ export default function SettingsPage() {
       setSmsNotificationsEnabled(profile.smsNotificationsEnabled ?? true);
     }
   }, [profile]);
+
+  // Load SMS template
+  useEffect(() => {
+    if (tab === "sms" && !smsPreview) {
+      getSmsTemplate().then(data => {
+        setSmsTemplate(data.template);
+        setSmsPreview(data);
+      }).catch(() => {});
+      getSmsAbsentTemplate().then(data => {
+        setAbsentTemplate(data.template);
+        setAbsentPreview(data);
+      }).catch(() => {});
+    }
+  }, [tab, smsPreview]);
 
   useEffect(() => {
     if (academicConfig) {
@@ -211,6 +265,66 @@ export default function SettingsPage() {
     }
   };
 
+  const handleTemplateChange = (value: string) => {
+    setSmsTemplate(value);
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = setTimeout(() => {
+      previewSmsTemplate(value).then(setSmsPreview).catch(() => {});
+    }, 400);
+  };
+
+  const handleTemplateSave = async () => {
+    setTemplateSaving(true);
+    setSmsMsg(null);
+    try {
+      const data = await updateSmsTemplate(smsTemplate);
+      setSmsPreview(data);
+      setSmsMsg({ type: "success", text: "SMS template saved" });
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        || (e instanceof Error ? e.message : "Failed to save");
+      setSmsMsg({ type: "error", text: msg });
+    } finally {
+      setTemplateSaving(false);
+    }
+  };
+
+  const handleResetTemplate = () => {
+    const defaultTpl = "Dear Parent,\n{student_name} has been marked present for {class_name} on {date} at {time}.\n\n- {teacher_name}";
+    setSmsTemplate(defaultTpl);
+    previewSmsTemplate(defaultTpl).then(setSmsPreview).catch(() => {});
+  };
+
+  const handleAbsentTemplateChange = (value: string) => {
+    setAbsentTemplate(value);
+    if (absentPreviewTimerRef.current) clearTimeout(absentPreviewTimerRef.current);
+    absentPreviewTimerRef.current = setTimeout(() => {
+      previewSmsAbsentTemplate(value).then(setAbsentPreview).catch(() => {});
+    }, 400);
+  };
+
+  const handleAbsentTemplateSave = async () => {
+    setAbsentTemplateSaving(true);
+    setSmsMsg(null);
+    try {
+      const data = await updateSmsAbsentTemplate(absentTemplate);
+      setAbsentPreview(data);
+      setSmsMsg({ type: "success", text: "Absent SMS template saved" });
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        || (e instanceof Error ? e.message : "Failed to save");
+      setSmsMsg({ type: "error", text: msg });
+    } finally {
+      setAbsentTemplateSaving(false);
+    }
+  };
+
+  const handleResetAbsentTemplate = () => {
+    const defaultTpl = "Dear Parent,\n{student_name} has not attended {class_name} today ({date}). Kindly look into this.\n\n- {teacher_name}";
+    setAbsentTemplate(defaultTpl);
+    previewSmsAbsentTemplate(defaultTpl).then(setAbsentPreview).catch(() => {});
+  };
+
   const handleSmsSettingsSave = async () => {
     setSmsSaving(true);
     setSmsMsg(null);
@@ -274,13 +388,39 @@ export default function SettingsPage() {
 
         {/* Tabs */}
         <div className="grid grid-cols-5 gap-1 bg-bg rounded-xl p-1 border border-border">
-          {tabs.map(t => (
-            <button key={t.key} onClick={() => { setTab(t.key); setProfileMsg(null); setPwMsg(null); setSmsMsg(null); setAcademicMsg(null); }}
-              className={`flex items-center justify-center gap-1 sm:gap-2 px-1 sm:px-4 py-2.5 rounded-lg text-[10px] sm:text-sm font-medium transition-all ${tab === t.key ? "bg-bg-card text-primary shadow-sm border border-border" : "text-text-muted hover:text-text"}`}>
-              {t.icon} <span className="hidden sm:inline">{t.label}</span><span className="sm:hidden">{t.shortLabel}</span>
-            </button>
-          ))}
+          {tabs.map(t => {
+            const dirty = t.key === "profile" ? profileDirty : t.key === "password" ? passwordDirty : t.key === "sms" ? (smsDirty || smsTemplateDirty || absentTemplateDirty) : t.key === "academic" ? academicDirty : false;
+            return (
+              <button key={t.key} onClick={() => { setTab(t.key); setProfileMsg(null); setPwMsg(null); setSmsMsg(null); setAcademicMsg(null); }}
+                className={`relative flex items-center justify-center gap-1 sm:gap-2 px-1 sm:px-4 py-2.5 rounded-lg text-[10px] sm:text-sm font-medium transition-all ${tab === t.key ? "bg-bg-card text-primary shadow-sm border border-border" : "text-text-muted hover:text-text"}`}>
+                {t.icon} <span className="hidden sm:inline">{t.label}</span><span className="sm:hidden">{t.shortLabel}</span>
+                {dirty && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />}
+              </button>
+            );
+          })}
         </div>
+
+        {/* Unsaved changes inline alert */}
+        <AnimatePresence>
+          {currentTabDirty && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border ${dk ? "bg-amber-500/10 border-amber-500/20" : "bg-amber-50 border-amber-200"}`}>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+                  <p className={`text-xs font-semibold ${dk ? "text-amber-400" : "text-amber-700"}`}>You have unsaved changes</p>
+                </div>
+                <button onClick={discardChanges} className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${dk ? "text-amber-400 hover:bg-amber-500/10" : "text-amber-700 hover:bg-amber-100"}`}>
+                  <Undo2 className="w-3 h-3" /> Discard
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {tab === "profile" && !loading ? (
           <motion.div key="profile" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
@@ -403,7 +543,7 @@ export default function SettingsPage() {
               )}
 
               <div className="flex justify-end pt-2">
-                <Button onClick={handleProfileSave} loading={profileSaving}><Save className="w-4 h-4" /> Save Changes</Button>
+                <Button onClick={handleProfileSave} loading={profileSaving} disabled={!profileDirty}><Save className="w-4 h-4" /> Save Changes</Button>
               </div>
             </div>
           </motion.div>
@@ -463,7 +603,7 @@ export default function SettingsPage() {
               )}
 
               <div className="flex justify-end pt-2">
-                <Button onClick={handlePasswordChange} loading={pwSaving}><Lock className="w-4 h-4" /> Change Password</Button>
+                <Button onClick={handlePasswordChange} loading={pwSaving} disabled={!passwordDirty}><Lock className="w-4 h-4" /> Change Password</Button>
               </div>
             </div>
           </motion.div>
@@ -535,20 +675,6 @@ export default function SettingsPage() {
               <div className="space-y-3">
                 <div className="rounded-xl border border-border bg-bg p-4">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                      <MessageSquare className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-text">SMS Template</p>
-                      <p className="text-xs text-text-muted mt-1">
-                        Messages follow this format: "Dear Parent, [Student Name] has been marked present for [Class Name] on [Date] at [Time]. - [Teacher Name]"
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-border bg-bg p-4">
-                  <div className="flex items-start gap-3">
                     <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
                       <AlertCircle className="w-4 h-4 text-amber-600" />
                     </div>
@@ -572,9 +698,205 @@ export default function SettingsPage() {
               )}
 
               <div className="flex justify-end pt-2">
-                <Button onClick={handleSmsSettingsSave} loading={smsSaving}>
+                <Button onClick={handleSmsSettingsSave} loading={smsSaving} disabled={!smsDirty}>
                   <Save className="w-4 h-4" /> Save SMS Settings
                 </Button>
+              </div>
+
+              {/* SMS Template Editor */}
+              <div className="border-t border-border pt-5">
+                <h4 className="font-semibold text-text text-sm mb-1">SMS Template</h4>
+                <p className="text-xs text-text-muted mb-4">Customize the message sent to parents when attendance is marked</p>
+
+                {/* Available variables */}
+                <div className="mb-3">
+                  <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Available Variables</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["{student_name}", "{class_name}", "{teacher_name}", "{date}", "{time}"].map(v => (
+                      <button key={v} type="button" onClick={() => {
+                        const el = document.getElementById("sms-template-input") as HTMLTextAreaElement;
+                        if (el) {
+                          const start = el.selectionStart;
+                          const end = el.selectionEnd;
+                          const newVal = smsTemplate.substring(0, start) + v + smsTemplate.substring(end);
+                          setSmsTemplate(newVal);
+                          handleTemplateChange(newVal);
+                          setTimeout(() => { el.focus(); el.setSelectionRange(start + v.length, start + v.length); }, 0);
+                        }
+                      }}
+                        className="text-[10px] font-mono font-semibold px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition cursor-pointer">
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Template textarea */}
+                <div>
+                  <label className="text-xs font-semibold text-text-muted mb-1.5 block">Message Template</label>
+                  <textarea
+                    id="sms-template-input"
+                    value={smsTemplate}
+                    onChange={e => handleTemplateChange(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-3 rounded-xl border border-border bg-bg-card text-sm text-text font-mono placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+                    placeholder="Dear Parent,&#10;{student_name} has been marked present..."
+                  />
+                  <div className="flex items-center justify-between mt-1.5">
+                    {(() => {
+                      const newlineCount = (smsTemplate.match(/\n/g) || []).length;
+                      const rawLen = smsTemplate.length + newlineCount;
+                      const rawUnits = rawLen > 0 ? Math.ceil(rawLen / 160) : 0;
+                      return (
+                        <div className="flex items-center gap-3">
+                          <span className={`text-[10px] font-semibold ${rawLen > 160 ? "text-amber-600" : "text-text-muted"}`}>
+                            {rawLen} chars
+                          </span>
+                          <span className="text-[10px] text-text-muted">·</span>
+                          <span className={`text-[10px] font-semibold ${rawUnits > 1 ? "text-amber-600" : "text-text-muted"}`}>
+                            {rawUnits} unit{rawUnits !== 1 ? "s" : ""} (template only)
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    <button onClick={handleResetTemplate} className="text-[11px] font-semibold text-primary hover:underline">Reset to default</button>
+                  </div>
+                </div>
+
+                {/* Live Preview */}
+                {smsPreview && (
+                  <div className="mt-4 space-y-3">
+                    <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Live Preview</p>
+                    <div className={`rounded-xl border p-4 ${dk ? "bg-[#0F172A] border-[#1E293B]" : "bg-slate-50 border-slate-200"}`}>
+                      <pre className="text-xs text-text whitespace-pre-wrap font-sans leading-relaxed">{smsPreview.preview}</pre>
+                    </div>
+
+                    {/* Cost breakdown */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className={`rounded-xl border p-3 text-center ${dk ? "bg-[#0F172A] border-[#1E293B]" : "bg-white border-slate-200"}`}>
+                        <p className="text-lg font-bold text-text">{smsPreview.characterCount}</p>
+                        <p className="text-[9px] text-text-muted font-semibold uppercase">Characters</p>
+                      </div>
+                      <div className={`rounded-xl border p-3 text-center ${dk ? "bg-[#0F172A] border-[#1E293B]" : "bg-white border-slate-200"}`}>
+                        <p className="text-lg font-bold text-text">{smsPreview.units}</p>
+                        <p className="text-[9px] text-text-muted font-semibold uppercase">SMS Units</p>
+                      </div>
+                      <div className={`rounded-xl border p-3 text-center ${dk ? "bg-[#0F172A] border-[#1E293B]" : "bg-white border-slate-200"}`}>
+                        <p className="text-lg font-bold text-primary">LKR {Number(smsPreview.cost).toFixed(2)}</p>
+                        <p className="text-[9px] text-text-muted font-semibold uppercase">Per SMS</p>
+                      </div>
+                    </div>
+
+                    {smsPreview.units > 1 && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                        <p className="text-xs text-amber-700">This template uses {smsPreview.units} SMS units. Consider shortening to reduce cost.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-4">
+                  <Button onClick={handleTemplateSave} loading={templateSaving} disabled={!smsTemplateDirty}>
+                    <Save className="w-4 h-4" /> Save Template
+                  </Button>
+                </div>
+              </div>
+
+              {/* Absent SMS Template Editor */}
+              <div className="border-t border-border pt-5">
+                <h4 className="font-semibold text-text text-sm mb-1">Absent SMS Template</h4>
+                <p className="text-xs text-text-muted mb-4">Customize the message sent to parents when a student is marked absent</p>
+
+                <div className="mb-3">
+                  <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Available Variables</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["{student_name}", "{class_name}", "{teacher_name}", "{date}"].map(v => (
+                      <button key={v} type="button" onClick={() => {
+                        const el = document.getElementById("sms-absent-template-input") as HTMLTextAreaElement;
+                        if (el) {
+                          const start = el.selectionStart;
+                          const end = el.selectionEnd;
+                          const newVal = absentTemplate.substring(0, start) + v + absentTemplate.substring(end);
+                          setAbsentTemplate(newVal);
+                          handleAbsentTemplateChange(newVal);
+                          setTimeout(() => { el.focus(); el.setSelectionRange(start + v.length, start + v.length); }, 0);
+                        }
+                      }}
+                        className="text-[10px] font-mono font-semibold px-2 py-1 rounded-md bg-red-500/10 text-red-600 hover:bg-red-500/20 transition cursor-pointer">
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-text-muted mb-1.5 block">Absent Message Template</label>
+                  <textarea
+                    id="sms-absent-template-input"
+                    value={absentTemplate}
+                    onChange={e => handleAbsentTemplateChange(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-3 rounded-xl border border-border bg-bg-card text-sm text-text font-mono placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+                    placeholder="Dear Parent,&#10;{student_name} has not attended..."
+                  />
+                  <div className="flex items-center justify-between mt-1.5">
+                    {(() => {
+                      const newlineCount = (absentTemplate.match(/\n/g) || []).length;
+                      const rawLen = absentTemplate.length + newlineCount;
+                      const rawUnits = rawLen > 0 ? Math.ceil(rawLen / 160) : 0;
+                      return (
+                        <div className="flex items-center gap-3">
+                          <span className={`text-[10px] font-semibold ${rawLen > 160 ? "text-amber-600" : "text-text-muted"}`}>
+                            {rawLen} chars
+                          </span>
+                          <span className="text-[10px] text-text-muted">·</span>
+                          <span className={`text-[10px] font-semibold ${rawUnits > 1 ? "text-amber-600" : "text-text-muted"}`}>
+                            {rawUnits} unit{rawUnits !== 1 ? "s" : ""} (template only)
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    <button onClick={handleResetAbsentTemplate} className="text-[11px] font-semibold text-primary hover:underline">Reset to default</button>
+                  </div>
+                </div>
+
+                {absentPreview && (
+                  <div className="mt-4 space-y-3">
+                    <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Live Preview</p>
+                    <div className={`rounded-xl border p-4 ${dk ? "bg-[#0F172A] border-[#1E293B]" : "bg-red-50 border-red-200"}`}>
+                      <pre className="text-xs text-text whitespace-pre-wrap font-sans leading-relaxed">{absentPreview.preview}</pre>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className={`rounded-xl border p-3 text-center ${dk ? "bg-[#0F172A] border-[#1E293B]" : "bg-white border-slate-200"}`}>
+                        <p className="text-lg font-bold text-text">{absentPreview.characterCount}</p>
+                        <p className="text-[9px] text-text-muted font-semibold uppercase">Characters</p>
+                      </div>
+                      <div className={`rounded-xl border p-3 text-center ${dk ? "bg-[#0F172A] border-[#1E293B]" : "bg-white border-slate-200"}`}>
+                        <p className="text-lg font-bold text-text">{absentPreview.units}</p>
+                        <p className="text-[9px] text-text-muted font-semibold uppercase">SMS Units</p>
+                      </div>
+                      <div className={`rounded-xl border p-3 text-center ${dk ? "bg-[#0F172A] border-[#1E293B]" : "bg-white border-slate-200"}`}>
+                        <p className="text-lg font-bold text-red-500">LKR {Number(absentPreview.cost).toFixed(2)}</p>
+                        <p className="text-[9px] text-text-muted font-semibold uppercase">Per SMS</p>
+                      </div>
+                    </div>
+
+                    {absentPreview.units > 1 && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                        <p className="text-xs text-amber-700">This template uses {absentPreview.units} SMS units. Consider shortening to reduce cost.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-4">
+                  <Button onClick={handleAbsentTemplateSave} loading={absentTemplateSaving} disabled={!absentTemplateDirty}>
+                    <Save className="w-4 h-4" /> Save Absent Template
+                  </Button>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -680,7 +1002,7 @@ export default function SettingsPage() {
               )}
 
               <div className="flex justify-end pt-2">
-                <Button onClick={handleAcademicSave} loading={academicSaving || academicLoading}><Save className="w-4 h-4" /> Save Configuration</Button>
+                <Button onClick={handleAcademicSave} loading={academicSaving || academicLoading} disabled={!academicDirty}><Save className="w-4 h-4" /> Save Configuration</Button>
               </div>
             </div>
           </motion.div>

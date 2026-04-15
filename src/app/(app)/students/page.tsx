@@ -28,7 +28,7 @@ export default function StudentsPage() {
   const previewWrapRef = useRef<HTMLDivElement>(null);
   const fetchStudents = useCallback(() => getStudents(), []);
   const { data: students, setData: setStudents, loading, refetch: _refetchStudents } = useFetch(fetchStudents, "students:all");
-  const refetch = useCallback(() => { invalidateCache("students"); invalidateCache("dashboard"); _refetchStudents(); }, [_refetchStudents]);
+  const refetch = useCallback(() => { invalidateCache("students"); invalidateCache("classes"); invalidateCache("dashboard"); _refetchStudents(); }, [_refetchStudents]);
   const fetchClasses = useCallback(() => getClasses(), []);
   const { data: classes } = useFetch(fetchClasses, "classes:all");
   const [search, setSearch] = useState("");

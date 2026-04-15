@@ -192,6 +192,27 @@ export const getAcademicYearConfig = () =>
 export const updateAcademicYearConfig = (data: { nextUpgradeDate: string }) =>
   api.put<ApiResponse<{ nextUpgradeDate: string; lastUpgradedAt: string | null }>>("/settings/academic-year", data).then((r) => r.data.data);
 
+// SMS Template
+export interface SmsTemplateData { template: string; preview: string; characterCount: number; units: number; cost: number; }
+
+export const getSmsTemplate = () =>
+  api.get<ApiResponse<SmsTemplateData>>("/settings/sms-template").then((r) => r.data.data);
+
+export const updateSmsTemplate = (template: string) =>
+  api.put<ApiResponse<SmsTemplateData>>("/settings/sms-template", { template }).then((r) => r.data.data);
+
+export const previewSmsTemplate = (template: string) =>
+  api.post<ApiResponse<SmsTemplateData>>("/settings/sms-template/preview", { template }).then((r) => r.data.data);
+
+export const getSmsAbsentTemplate = () =>
+  api.get<ApiResponse<SmsTemplateData>>("/settings/sms-absent-template").then((r) => r.data.data);
+
+export const updateSmsAbsentTemplate = (template: string) =>
+  api.put<ApiResponse<SmsTemplateData>>("/settings/sms-absent-template", { template }).then((r) => r.data.data);
+
+export const previewSmsAbsentTemplate = (template: string) =>
+  api.post<ApiResponse<SmsTemplateData>>("/settings/sms-absent-template/preview", { template }).then((r) => r.data.data);
+
 // SMS Settings
 export const updateSmsSettings = (data: { smsNotificationsEnabled: boolean }) =>
   api.put<ApiResponse<TeacherProfile>>("/settings/sms-settings", data).then((r) => r.data.data);
@@ -202,5 +223,17 @@ export const getCurrentMonthUsage = () =>
 
 export const getBillingHistory = () =>
   api.get<ApiResponse<BillingHistory>>("/billing/history").then((r) => r.data.data);
+
+export const exportBillingReport = (month?: string) =>
+  api.get("/billing/report", { params: month ? { month } : {}, responseType: "blob" }).then((r) => {
+    const url = window.URL.createObjectURL(new Blob([r.data], { type: "application/pdf" }));
+    const disposition = r.headers["content-disposition"] || "";
+    const filename = disposition.match(/filename="(.+)"/)?.[1] || `Nexora-Bill-${month || "current"}.pdf`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  });
 
 export default api;

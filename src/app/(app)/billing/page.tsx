@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Button from '@/components/ui/Button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -13,10 +13,13 @@ import {
   Download,
   Info,
   DollarSign,
-  Smartphone
+  Smartphone,
+  ChevronDown,
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { CurrentMonthUsage, BillingHistory } from '@/lib/types';
-import { getCurrentMonthUsage, getBillingHistory } from '@/services/api';
+import { getCurrentMonthUsage, getBillingHistory, exportBillingReport } from '@/services/api';
 import PageSkeleton from '@/components/ui/PageSkeleton';
 
 export default function BillingPage() {
@@ -24,6 +27,12 @@ export default function BillingPage() {
   const [billingHistory, setBillingHistory] = useState<BillingHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportYear, setExportYear] = useState(new Date().getFullYear());
+  const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
+  const [exporting, setExporting] = useState(false);
+  const [yearOpen, setYearOpen] = useState(false);
+  const [monthOpen, setMonthOpen] = useState(false);
   const PAGE_SIZE = 5;
 
   useEffect(() => {
@@ -71,6 +80,22 @@ export default function BillingPage() {
       return acc; 
     }, []);
 
+  const handleExport = async (month?: string) => {
+    setExporting(true);
+    try {
+      await exportBillingReport(month);
+    } catch {
+      console.error('Failed to export report');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+
   if (loading && !currentMonth) return <PageSkeleton />;
 
   return (
@@ -81,25 +106,126 @@ export default function BillingPage() {
           <h2 className="text-lg font-semibold text-text">Monthly Billing</h2>
           <p className="text-xs text-text-muted mt-0.5">Track your SMS usage and monthly subscription costs</p>
         </div>
-        <Button variant="outline" className="w-full sm:w-auto">
-          <Download className="h-4 w-4" /> Export Report
-        </Button>
+        <div className="relative">
+          <button onClick={() => setExportOpen(!exportOpen)}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl transition-all active:scale-[0.97]"
+            style={{ background: 'linear-gradient(135deg, #4F46E5, #3730A3)', boxShadow: '0 4px 14px rgba(79,70,229,0.3)' }}>
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Export Report
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${exportOpen ? 'rotate-180' : ''}`} />
+          </button>
+          <AnimatePresence>
+            {exportOpen && (<>
+              <div className="fixed inset-0 z-30" onClick={() => setExportOpen(false)} />
+              <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.15 }}
+                className="absolute right-0 top-full mt-2 z-40 bg-bg-card rounded-2xl border border-border shadow-xl w-[280px] overflow-visible">
+                <div className="p-4 border-b border-border">
+                  <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-3">Quick Export</p>
+                  <button onClick={() => handleExport()} disabled={exporting}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/5 border border-primary/20 hover:bg-primary/10 transition">
+                    <FileText className="w-4 h-4 text-primary" />
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-text">Current Month</p>
+                      <p className="text-[10px] text-text-muted">{new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+                    </div>
+                  </button>
+                </div>
+                <div className="p-4">
+                  <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-3">Custom Month</p>
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    {/* Year dropdown */}
+                    <div>
+                      <label className="text-[10px] font-semibold text-text-muted mb-1 block">Year</label>
+                      <div className="relative">
+                        <button onClick={(e) => { e.stopPropagation(); setYearOpen(!yearOpen); setMonthOpen(false); }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-sm font-medium transition-all ${yearOpen ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-primary/30'} bg-bg-card`}>
+                          <span className="text-text">{exportYear}</span>
+                          <ChevronDown className={`w-3.5 h-3.5 text-text-muted transition-transform ${yearOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        <AnimatePresence>
+                          {yearOpen && (
+                            <motion.div initial={{ opacity: 0, y: -4, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.97 }} transition={{ duration: 0.12 }}
+                              className="absolute left-0 right-0 top-full mt-1 z-50 bg-bg-card rounded-xl border border-border shadow-xl max-h-[160px] overflow-y-auto p-1">
+                              {years.map(y => (
+                                <button key={y} onClick={(e) => { e.stopPropagation(); setExportYear(y); setYearOpen(false); }}
+                                  className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${exportYear === y ? 'text-white bg-primary shadow-sm' : 'text-text hover:bg-bg'}`}>
+                                  {y}
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                    {/* Month dropdown */}
+                    <div>
+                      <label className="text-[10px] font-semibold text-text-muted mb-1 block">Month</label>
+                      <div className="relative">
+                        <button onClick={(e) => { e.stopPropagation(); setMonthOpen(!monthOpen); setYearOpen(false); }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-sm font-medium transition-all ${monthOpen ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-primary/30'} bg-bg-card`}>
+                          <span className="text-text truncate">{MONTHS[exportMonth - 1]?.slice(0, 3)}</span>
+                          <ChevronDown className={`w-3.5 h-3.5 text-text-muted transition-transform ${monthOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        <AnimatePresence>
+                          {monthOpen && (
+                            <motion.div initial={{ opacity: 0, y: -4, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.97 }} transition={{ duration: 0.12 }}
+                              className="absolute left-0 right-0 top-full mt-1 z-50 bg-bg-card rounded-xl border border-border shadow-xl max-h-[200px] overflow-y-auto p-1">
+                              {MONTHS.map((m, i) => (
+                                <button key={i} onClick={(e) => { e.stopPropagation(); setExportMonth(i + 1); setMonthOpen(false); }}
+                                  className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${exportMonth === i + 1 ? 'text-white bg-primary shadow-sm' : 'text-text hover:bg-bg'}`}>
+                                  {m}
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => handleExport(`${exportYear}-${String(exportMonth).padStart(2, '0')}`)} disabled={exporting}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg, #4F46E5, #3730A3)' }}>
+                    {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    Download PDF
+                  </button>
+                </div>
+              </motion.div>
+            </>)}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Current Month Overview - Stat Cards */}
       {currentMonth && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Total Cost - Credit Card Style */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            className="relative sm:col-span-2 lg:col-span-1 rounded-2xl p-6 overflow-hidden shadow-xl" style={{ background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 50%, #1E1B4B 100%)" }}>
+            {/* Card decorations */}
+            <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-white/5 -translate-y-16 translate-x-16" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full bg-white/5 translate-y-12 -translate-x-12" />
+            <div className="absolute top-4 right-5 flex gap-1">
+              <div className="w-6 h-6 rounded-full bg-white/20" />
+              <div className="w-6 h-6 rounded-full bg-white/10 -ml-3" />
+            </div>
+            <div className="relative">
+              <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Total Monthly Cost</p>
+              <p className="text-3xl font-bold text-white mt-2 tracking-tight">{formatCurrency(currentMonth.totalCurrentCost)}</p>
+              <div className="flex items-center justify-between mt-6">
+                <div>
+                  <p className="text-[9px] text-white/40 uppercase tracking-wider">Billing Period</p>
+                  <p className="text-xs font-semibold text-white/80 mt-0.5">{currentMonth.monthDisplay}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] text-white/40 uppercase tracking-wider">Status</p>
+                  <p className="text-xs font-semibold text-emerald-300 mt-0.5">Active</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Other stat cards */}
           {[
-            { 
-              label: "TOTAL COST", 
-              value: formatCurrency(currentMonth.totalCurrentCost), 
-              sub: currentMonth.monthDisplay, 
-              gradient: "from-[#4F46E5] to-[#3730A3]", 
-              accentColor: "#4F46E5", 
-              icon: <CreditCard className="w-5 h-5" />, 
-              trend: "Monthly", 
-              up: null 
-            },
             { 
               label: "SMS UNITS", 
               value: currentMonth.currentUnits, 
@@ -131,7 +257,7 @@ export default function BillingPage() {
               up: null 
             },
           ].map((card, i) => (
-            <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+            <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: (i + 1) * 0.08 }}
               className="relative bg-bg-card rounded-2xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-border hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] transition-all duration-200 overflow-hidden group">
               {/* Decorative background sparkline */}
               <svg className="absolute bottom-0 right-0 w-28 h-16 opacity-[0.06] group-hover:opacity-[0.10] transition-opacity" viewBox="0 0 120 60" fill="none">

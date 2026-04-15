@@ -22,7 +22,7 @@ const PAGE_SIZE = 10;
 export default function ClassesPage() {
   const fetchClasses = useCallback(() => getClasses(), []);
   const { data: classes, loading, refetch: _refetchClasses } = useFetch(fetchClasses, "classes:all");
-  const refetch = useCallback(() => { invalidateCache("classes"); invalidateCache("dashboard"); _refetchClasses(); }, [_refetchClasses]);
+  const refetch = useCallback(() => { invalidateCache("classes"); invalidateCache("students"); invalidateCache("dashboard"); _refetchClasses(); }, [_refetchClasses]);
   const [search, setSearch] = useState("");
   const [filterGrade, setFilterGrade] = useState<number | "ALL">("ALL");
   const [modalOpen, setModalOpen] = useState(false);
