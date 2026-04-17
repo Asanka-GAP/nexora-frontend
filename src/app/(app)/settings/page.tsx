@@ -1,6 +1,6 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen, Calendar, GraduationCap, Sun, Moon, Monitor, MessageSquare, Undo2 } from "lucide-react";
+import { User, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle, Mail, Phone, BookOpen, Calendar, GraduationCap, Sun, Moon, Monitor, MessageSquare, Undo2, CreditCard } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
 import DatePicker from "@/components/shared/DatePicker";
@@ -11,7 +11,8 @@ import { getTeacherProfile, updateTeacherProfile, changeTeacherPassword, sendEma
 import type { SmsTemplateData } from "@/services/api";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 
-type Tab = "profile" | "password" | "sms" | "appearance" | "academic";
+import IdCardDesigner from "@/components/id-card/IdCardDesigner";
+type Tab = "profile" | "password" | "sms" | "appearance" | "academic" | "idcard";
 
 export default function SettingsPage() {
   const { updateUser } = useAuth();
@@ -347,6 +348,7 @@ export default function SettingsPage() {
     { key: "sms", label: "SMS Notifications", shortLabel: "SMS", icon: <MessageSquare className="w-4 h-4" /> },
     { key: "appearance", label: "Appearance", shortLabel: "Theme", icon: <Sun className="w-4 h-4" /> },
     { key: "academic", label: "Academic Year", shortLabel: "Academic", icon: <BookOpen className="w-4 h-4" /> },
+    { key: "idcard", label: "ID Card Design", shortLabel: "ID Card", icon: <CreditCard className="w-4 h-4" /> },
   ];
 
   if (loading && !profile) return <PageSkeleton />;
@@ -936,6 +938,16 @@ export default function SettingsPage() {
               </div>
             </div>
           </motion.div>
+        ) : tab === "idcard" ? (
+          <div className="rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-border overflow-hidden bg-bg-card">
+            <div className="bg-gradient-to-r from-violet-600 to-purple-700 px-6 py-4">
+              <h2 className="font-semibold text-white flex items-center gap-2"><CreditCard className="h-5 w-5" /> ID Card Designer</h2>
+              <p className="text-xs text-violet-100 mt-0.5">Drag and drop elements to design your student ID card</p>
+            </div>
+            <div className="p-6">
+              <IdCardDesigner />
+            </div>
+          </div>
         ) : tab === "academic" ? (
           <motion.div key="academic" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
             className="bg-bg-card rounded-2xl border border-border overflow-hidden">

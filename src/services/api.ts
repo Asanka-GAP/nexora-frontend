@@ -188,6 +188,12 @@ export const sendEmailOtp = (newEmail: string) =>
 export const changeTeacherEmail = (newEmail: string, otp: string) =>
   api.put<ApiResponse<TeacherProfile>>("/settings/email", { newEmail, otp }).then((r) => r.data.data);
 
+export const getIdCardDesign = () =>
+  api.get<ApiResponse<{ design: string | null }>>("/settings/id-card-design").then((r) => r.data.data);
+
+export const saveIdCardDesign = (design: string) =>
+  api.put<ApiResponse<{ design: string }>>("/settings/id-card-design", { design }).then((r) => r.data.data);
+
 // Academic Year Config
 export const getAcademicYearConfig = () =>
   api.get<ApiResponse<{ nextUpgradeDate: string; lastUpgradedAt: string | null }>>("/settings/academic-year").then((r) => r.data.data);

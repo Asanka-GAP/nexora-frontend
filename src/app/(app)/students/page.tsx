@@ -6,6 +6,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { toPng } from "html-to-image";
 import { useAuth } from "@/lib/auth";
+import { getIdCardDesign } from "@/services/api";
+import { CardDesign, DEFAULT_DESIGN, CARD_W, CARD_H } from "@/components/id-card/types";
+import { renderCardHtml, renderCardPrintStyles, renderCardInnerHtml, resolveContent } from "@/components/id-card/renderer";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useFetch } from "@/hooks/useFetch";
@@ -69,6 +72,7 @@ export default function StudentsPage() {
   const [bulkResult, setBulkResult] = useState<{ total: number; success: number; failed: number; errors: string[] } | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [qrLoading, setQrLoading] = useState(false);
+  const [cardDesign, setCardDesign] = useState<CardDesign>(DEFAULT_DESIGN);
 
   useEffect(() => {
     if (qrStudent) {
@@ -78,6 +82,13 @@ export default function StudentsPage() {
         .catch(() => { setQrDataUrl(""); setQrLoading(false); });
     } else { setQrDataUrl(""); setQrLoading(false); }
   }, [qrStudent]);
+
+  // Load saved card design
+  useEffect(() => {
+    getIdCardDesign().then((data) => {
+      if (data.design) try { setCardDesign(JSON.parse(data.design)); } catch { /* use default */ }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!qrStudent) return;
@@ -121,46 +132,18 @@ ${cardHtml(qrStudent, qrDataUrl)}
     printWindow.onload = () => { setTimeout(() => { printWindow.print(); printWindow.close(); }, 500); };
   };
 
-  const cardPrintStyles = () => `<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<style>
-@page { size: 85.6mm 54mm; margin: 0; }
-* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; letter-spacing: -0.01em; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-body { background: #fff; }
-.card { width: 85.6mm; height: 54mm; background: #fff; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #e2e8f0; page-break-after: always; page-break-inside: avoid; }
-.header { background: linear-gradient(135deg, #4F46E5, #3730A3); padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; }
-.header-title { color: #fff; font-weight: 700; font-size: 15px; line-height: 1.2; }
-.header-sub { color: rgba(255,255,255,0.7); font-size: 8px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
-.header-logo { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 14px; }
-.body { padding: 10px 16px; display: flex; gap: 14px; flex: 1; }
-.info { flex: 1; }
-.label { font-size: 8px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 1px; }
-.name { font-size: 16px; font-weight: 700; color: #1e293b; line-height: 1.3; }
-.divider { width: 100%; height: 1px; background: #e2e8f0; margin: 7px 0; }
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 14px; }
-.value { font-size: 11px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.value-id { font-size: 11px; font-weight: 700; color: #4F46E5; font-family: 'Courier New', monospace; }
-.qr-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; }
-.qr-border { border: 1.5px solid #f1f5f9; border-radius: 8px; padding: 3px; }
-.qr-border img { width: 95px; height: 95px; display: block; }
-.qr-text { font-size: 7px; color: #94a3b8; margin-top: 3px; text-align: center; }
-.footer { padding: 5px 16px; background: #f8fafc; border-top: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
-.footer-text { font-size: 7px; color: #94a3b8; }
-.footer-brand { font-size: 7px; color: #94a3b8; font-weight: 600; }
-</style>`;
+  const cardPrintStyles = () => renderCardPrintStyles();
 
-  const cardHtml = (s: Student, qrUrl: string) => `<div class="card">
-  <div class="header"><div><div class="header-title">Nexora</div><div class="header-sub">Student Identity Card</div></div><div class="header-logo">N</div></div>
-  <div class="body"><div class="info">
-    <div class="label">Student Name</div><div class="name">${s.fullName}</div><div class="divider"></div>
-    <div class="grid">
-      <div><div class="label">Student ID</div><div class="value-id">${s.studentCode}</div></div>
-      <div><div class="label">Enrolled</div><div class="value">${new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div></div>
-      <div><div class="label">Teacher</div><div class="value">${user?.name ?? "\u2014"}</div></div>
-      <div><div class="label">Subject</div><div class="value">${user?.subject ?? "\u2014"}</div></div>
-    </div>
-  </div><div class="qr-wrap"><div class="qr-border"><img src="${qrUrl}" alt="QR" /></div><div class="qr-text">Scan for attendance</div></div></div>
-  <div class="footer"><div class="footer-text">Valid throughout student's enrollment</div><div class="footer-brand">nexora.app</div></div>
-</div>`;
+  const getStudentData = (s: Student) => ({
+    studentName: s.fullName,
+    studentCode: s.studentCode,
+    enrolledDate: new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    teacherName: user?.name ?? "\u2014",
+    subject: user?.subject ?? "\u2014",
+    grade: String(s.currentGrade),
+  });
+
+  const cardHtml = (s: Student, qrUrl: string) => renderCardHtml(cardDesign, getStudentData(s), qrUrl);
 
   const printBulkCards = async () => {
     const activeStudents = filtered.filter(s => s.isActive);
@@ -843,113 +826,24 @@ body { background: #fff; }
         )}
         {qrStudent && !qrLoading && (
           <div className="flex flex-col items-center gap-4">
-            {/* ID Card — CR80 card size ratio (85.6mm × 54mm = 1.586:1) */}
-            {/* Hidden full-size card for download/print */}
+            {/* Hidden full-size card for download */}
             <div className="fixed -left-[9999px] -top-[9999px]">
-              <div ref={cardRef} style={{ width: 450, height: 284, fontFamily: "'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "-0.01em" }}
-                className="id-card-preview bg-white overflow-hidden flex flex-col">
-              {/* Card header */}
-              <div style={{ background: "linear-gradient(135deg, #4F46E5, #3730A3)" }} className="px-5 py-3 flex items-center justify-between flex-shrink-0">
-                <div>
-                  <p className="text-white font-bold text-base leading-tight">Nexora</p>
-                  <p className="text-white/70 text-[9px] uppercase tracking-widest font-semibold">Student Identity Card</p>
-                </div>
-                <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
-                  <span className="text-white font-black text-base">N</span>
-                </div>
-              </div>
-              {/* Card body */}
-              <div className="px-5 py-4 flex gap-4 flex-1">
-                {/* Left: Info */}
-                <div className="flex-1 flex flex-col min-w-0">
-                  <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Student Name</p>
-                  <p className="text-lg font-bold text-slate-800 leading-snug">{qrStudent.fullName}</p>
-                  <div className="w-full h-px bg-slate-200 my-2.5" />
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-                    <div>
-                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Student ID</p>
-                      <p className="text-sm font-bold text-indigo-600 font-mono">{qrStudent.studentCode}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Enrolled</p>
-                      <p className="text-sm font-semibold text-slate-700">{new Date(qrStudent.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Teacher</p>
-                      <p className="text-sm font-semibold text-slate-700">{user?.name ?? "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Subject</p>
-                      <p className="text-sm font-semibold text-slate-700">{user?.subject ?? "—"}</p>
-                    </div>
-                  </div>
-                </div>
-                {/* Right: QR */}
-                <div className="flex flex-col items-center justify-center flex-shrink-0">
-                  <div className="bg-white rounded-xl border-2 border-slate-100 p-1">
-                    {qrDataUrl && <img src={qrDataUrl} alt="QR" style={{ width: 135, height: 135 }} />}
-                  </div>
-                  <p className="text-[8px] text-slate-400 mt-1 text-center">Scan for attendance</p>
-                </div>
-              </div>
-              {/* Card footer */}
-              <div className="px-5 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
-                <p className="text-[8px] text-slate-400">Valid throughout student&apos;s enrollment</p>
-                <p className="text-[8px] text-slate-400 font-semibold">nexora.app</p>
-              </div>
-              </div>
+              <div ref={cardRef} style={{ width: CARD_W, height: CARD_H, fontFamily: "'Inter', sans-serif", position: 'relative', background: cardDesign.bgColor, overflow: 'hidden' }}
+                className="id-card-preview"
+                dangerouslySetInnerHTML={{ __html: renderCardInnerHtml(cardDesign, getStudentData(qrStudent), qrDataUrl) }} />
             </div>
-            {/* Visible preview — auto-scales to fit */}
+            {/* Visible preview */}
             <div ref={previewWrapRef} className="w-full overflow-hidden">
-              <div style={{ width: 450, height: 284, fontFamily: "'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "-0.01em", transformOrigin: 'top left' }}
-                className="id-card-preview bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-200 flex flex-col">
-              {/* Card header */}
-              <div style={{ background: "linear-gradient(135deg, #4F46E5, #3730A3)" }} className="px-5 py-3 flex items-center justify-between flex-shrink-0">
-                <div>
-                  <p className="text-white font-bold text-base leading-tight">Nexora</p>
-                  <p className="text-white/70 text-[9px] uppercase tracking-widest font-semibold">Student Identity Card</p>
-                </div>
-                <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
-                  <span className="text-white font-black text-base">N</span>
-                </div>
-              </div>
-              {/* Card body */}
-              <div className="px-5 py-4 flex gap-4 flex-1">
-                <div className="flex-1 flex flex-col min-w-0">
-                  <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Student Name</p>
-                  <p className="text-lg font-bold text-slate-800 leading-snug">{qrStudent.fullName}</p>
-                  <div className="w-full h-px bg-slate-200 my-2.5" />
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-                    <div>
-                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Student ID</p>
-                      <p className="text-sm font-bold text-indigo-600 font-mono">{qrStudent.studentCode}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Enrolled</p>
-                      <p className="text-sm font-semibold text-slate-700">{new Date(qrStudent.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Teacher</p>
-                      <p className="text-sm font-semibold text-slate-700">{user?.name ?? "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Subject</p>
-                      <p className="text-sm font-semibold text-slate-700">{user?.subject ?? "—"}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-col items-center justify-center flex-shrink-0">
-                  <div className="bg-white rounded-xl border-2 border-slate-100 p-1">
-                    {qrDataUrl && <img src={qrDataUrl} alt="QR" style={{ width: 135, height: 135 }} />}
-                  </div>
-                  <p className="text-[8px] text-slate-400 mt-1 text-center">Scan for attendance</p>
-                </div>
-              </div>
-              {/* Card footer */}
-              <div className="px-5 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
-                <p className="text-[8px] text-slate-400">Valid throughout student&apos;s enrollment</p>
-                <p className="text-[8px] text-slate-400 font-semibold">nexora.app</p>
-              </div>
+              <div style={{ width: CARD_W, height: CARD_H, fontFamily: "'Inter', sans-serif", transformOrigin: 'top left', position: 'relative', background: cardDesign.bgColor, overflow: 'hidden' }}
+                className="id-card-preview rounded-2xl shadow-lg border border-slate-200">
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${cardDesign.headerHeight}%`, background: cardDesign.headerBg }} />
+                {cardDesign.elements.map(el => {
+                  const content = resolveContent(el.content, getStudentData(qrStudent));
+                  const base: React.CSSProperties = { position: 'absolute', left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%` };
+                  if (el.type === 'qr') return <div key={el.id} style={{ ...base, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ width: '100%', height: '100%', background: '#fff', border: '2px solid #f1f5f9', borderRadius: 10, padding: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{qrDataUrl && <img src={qrDataUrl} alt="QR" style={{ width: '100%', height: '100%' }} />}</div></div>;
+                  if (el.type === 'shape') return <div key={el.id} style={{ ...base, background: el.bgColor, borderRadius: el.borderRadius, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '0 4px' }}><span style={{ fontSize: el.fontSize, fontWeight: el.fontWeight, color: el.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', display: 'block', textAlign: 'center' }}>{content}</span></div>;
+                  return <div key={el.id} style={{ ...base, fontSize: el.fontSize, fontWeight: el.fontWeight, color: el.color, textAlign: el.textAlign || 'left', lineHeight: 1.3, display: 'flex', alignItems: 'center', overflow: 'hidden' }}><span style={{ width: '100%', textAlign: el.textAlign || 'left', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{content}</span></div>;
+                })}
               </div>
             </div>
 
