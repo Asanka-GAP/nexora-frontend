@@ -204,6 +204,7 @@ export interface MonthlyBill {
   messagesSent: number;
   softwareCost: number;
   totalCost: number;
+  paymentStatus: string;
 }
 
 export interface CurrentMonthUsage {
@@ -214,6 +215,7 @@ export interface CurrentMonthUsage {
   messagesSent: number;
   softwareCost: number;
   totalCurrentCost: number;
+  paymentStatus: string;
   usageDisplay: string;
 }
 

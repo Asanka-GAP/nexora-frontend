@@ -217,8 +217,8 @@ export default function BillingPage() {
                   <p className="text-xs font-semibold text-white/80 mt-0.5">{currentMonth.monthDisplay}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] text-white/40 uppercase tracking-wider">Status</p>
-                  <p className="text-xs font-semibold text-emerald-300 mt-0.5">Active</p>
+                  <p className="text-[9px] text-white/40 uppercase tracking-wider">Payment</p>
+                  <p className={`text-xs font-semibold mt-0.5 ${currentMonth.paymentStatus === 'PAID' ? 'text-emerald-300' : currentMonth.paymentStatus === 'OVERDUE' ? 'text-red-300' : 'text-amber-300'}`}>{currentMonth.paymentStatus}</p>
                 </div>
               </div>
             </div>
@@ -410,6 +410,7 @@ export default function BillingPage() {
                   <th className="text-right py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider">SMS Cost</th>
                   <th className="text-right py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider">Software</th>
                   <th className="text-right py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider">Total</th>
+                  <th className="text-center py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider">Payment</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -445,6 +446,9 @@ export default function BillingPage() {
                     <td className="text-right py-4 px-6">
                       <div className="font-bold text-lg text-indigo-600 dark:text-indigo-400">{formatCurrency(bill.totalCost)}</div>
                     </td>
+                    <td className="text-center py-4 px-6">
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${bill.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : bill.paymentStatus === 'OVERDUE' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'}`}>{bill.paymentStatus}</span>
+                    </td>
                   </motion.tr>
                 ))}
               </tbody>
@@ -466,7 +470,10 @@ export default function BillingPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div>
-                        <p className="font-semibold text-text text-sm">{bill.monthDisplay}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-text text-sm">{bill.monthDisplay}</p>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${bill.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : bill.paymentStatus === 'OVERDUE' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'}`}>{bill.paymentStatus}</span>
+                        </div>
                         <p className="text-[10px] text-text-muted font-mono">{bill.month}</p>
                       </div>
                       <div className="text-right">

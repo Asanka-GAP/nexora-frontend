@@ -169,6 +169,9 @@ export const deleteTeacher = (id: string) =>
 export const getTeacherBilling = (id: string) =>
   api.get<ApiResponse<{ teacherName: string; currentMonth: CurrentMonthUsage; billingHistory: BillingHistory }>>(`/admin/teachers/${id}/billing`).then((r) => r.data.data);
 
+export const updateTeacherPaymentStatus = (id: string, yearMonth: string, paymentStatus: string) =>
+  api.patch<ApiResponse<void>>(`/admin/teachers/${id}/billing/payment-status`, { yearMonth, paymentStatus });
+
 // Teacher Settings
 export const getTeacherProfile = () =>
   api.get<ApiResponse<TeacherProfile>>("/settings/profile").then((r) => r.data.data);
