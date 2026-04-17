@@ -75,7 +75,8 @@ export default function DashboardPage() {
 
   const loading = sLoading || cLoading || dLoading;
   const allSessions = upcomingSessions ?? [];
-  const upcoming = useMemo(() => allSessions.filter(s => s.status === "UPCOMING").slice(0, 6), [allSessions]);
+  const upcomingAll = useMemo(() => allSessions.filter(s => s.status === "UPCOMING"), [allSessions]);
+  const upcoming = useMemo(() => upcomingAll.slice(0, 6), [upcomingAll]);
 
   const eventsByDate = useMemo(() => {
     const map: Record<string, typeof allSessions> = {};
@@ -140,7 +141,7 @@ export default function DashboardPage() {
             { label: "TODAY'S SCANS", value: dashboard?.todayCount ?? 0, sub: `${dashboard?.todayCount ?? 0} attendance marked`, gradient: "from-[#4F46E5] to-[#3730A3]", lightBg: "bg-indigo-50", lightText: "text-indigo-600", accentColor: "#4F46E5", icon: <CheckCircle className="w-5 h-5" />, trend: "+12%", up: true },
             { label: "STUDENTS", value: students?.length ?? 0, sub: "Total enrolled", gradient: "from-emerald-500 to-emerald-600", lightBg: "bg-emerald-50", lightText: "text-emerald-600", accentColor: "#10b981", icon: <Users className="w-5 h-5" />, trend: "+3", up: true },
             { label: "CLASSES", value: classes?.length ?? 0, sub: "Active classes", gradient: "from-violet-500 to-purple-600", lightBg: "bg-violet-50", lightText: "text-violet-600", accentColor: "#8b5cf6", icon: <BookOpen className="w-5 h-5" />, trend: "Stable", up: null },
-            { label: "UPCOMING", value: upcoming.length, sub: "This week", gradient: "from-amber-500 to-orange-500", lightBg: "bg-amber-50", lightText: "text-amber-600", accentColor: "#f59e0b", icon: <CalendarIcon className="w-5 h-5" />, trend: upcoming.length > 0 ? `${upcoming.length} sessions` : "None", up: upcoming.length > 0 ? true : null },
+            { label: "UPCOMING", value: upcomingAll.length, sub: "This week", gradient: "from-amber-500 to-orange-500", lightBg: "bg-amber-50", lightText: "text-amber-600", accentColor: "#f59e0b", icon: <CalendarIcon className="w-5 h-5" />, trend: upcomingAll.length > 0 ? `${upcomingAll.length} sessions` : "None", up: upcomingAll.length > 0 ? true : null },
           ].map((card, i) => (
             <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
               className="relative bg-white rounded-2xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-slate-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] transition-all duration-200 overflow-hidden group">

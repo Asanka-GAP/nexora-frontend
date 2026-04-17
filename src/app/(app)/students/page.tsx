@@ -12,7 +12,7 @@ import { renderCardHtml, renderCardPrintStyles, renderCardInnerHtml, resolveCont
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useFetch } from "@/hooks/useFetch";
-import { getStudents, getClasses, createStudent, updateStudent, deleteStudentApi, toggleStudentStatus, addStudentContact, deleteStudentContact, bulkImportStudents } from "@/services/api";
+import { getStudents, getClasses, createStudent, updateStudent, deleteStudentApi, toggleStudentStatus, addStudentContact, deleteStudentContact, bulkImportStudents, bulkAssignClasses } from "@/services/api";
 import type { Student, ClassItem } from "@/lib/types";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 import AttendanceDrawer from "@/components/students/AttendanceDrawer";
@@ -70,6 +70,17 @@ export default function StudentsPage() {
   const [csvRows, setCsvRows] = useState<{ fullName: string; currentGrade: number; address: string; parentName: string; parentPhone: string; parentRelationship: string }[]>([]);
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ total: number; success: number; failed: number; errors: string[] } | null>(null);
+  const [bulkImportClassIds, setBulkImportClassIds] = useState<string[]>([]);
+  const [bulkImportClassDropdown, setBulkImportClassDropdown] = useState(false);
+  const [bulkImportClassSearch, setBulkImportClassSearch] = useState("");
+
+  // Bulk Select & Assign
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkAssignClassIds, setBulkAssignClassIds] = useState<string[]>([]);
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [bulkAssignClassDropdown, setBulkAssignClassDropdown] = useState(false);
+  const [bulkAssignClassSearch, setBulkAssignClassSearch] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [qrLoading, setQrLoading] = useState(false);
   const [cardDesign, setCardDesign] = useState<CardDesign>(DEFAULT_DESIGN);
@@ -256,6 +267,19 @@ ${cardHtml(qrStudent, qrDataUrl)}
     .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
     .reduce<(number | string)[]>((acc, p, idx, arr) => { if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []);
 
+  const toggleSelectStudent = (id: string) => setSelectedStudentIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const toggleSelectAll = () => setSelectedStudentIds(prev => prev.size === paginated.length ? new Set() : new Set(paginated.map(s => s.id)));
+  const handleBulkAssign = async () => {
+    if (!selectedStudentIds.size || !bulkAssignClassIds.length) { toast.error("Select students and classes"); return; }
+    setBulkAssigning(true);
+    try {
+      const result = await bulkAssignClasses({ studentIds: [...selectedStudentIds], classIds: bulkAssignClassIds });
+      toast.success(`${result.enrollmentsCreated} enrollments created${result.skippedDuplicates ? `, ${result.skippedDuplicates} already existed` : ""}`);
+      setBulkAssignOpen(false); setBulkAssignClassIds([]); setSelectedStudentIds(new Set()); refetch();
+    } catch { toast.error("Failed to assign classes"); }
+    finally { setBulkAssigning(false); }
+  };
+
   const activeCount = all.filter(s => s.isActive).length;
   const inactiveCount = all.length - activeCount;
   const totalAttendance = all.reduce((sum, s) => sum + (s.attendanceCount || 0), 0);
@@ -271,7 +295,7 @@ ${cardHtml(qrStudent, qrDataUrl)}
         <div><h2 className="text-lg font-semibold text-text">All Students</h2><p className="text-xs text-text-muted mt-0.5">{all.length} students total</p></div>
         <div className="grid grid-cols-3 sm:flex sm:items-center gap-2">
           <Button variant="outline" size="sm" onClick={printBulkCards} loading={bulkCardsPrinting} className="text-xs"><Printer className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Print Cards</span><span className="sm:hidden">Cards</span></Button>
-          <Button variant="outline" size="sm" onClick={() => { setBulkOpen(true); setCsvRows([]); setBulkResult(null); }} className="text-xs"><Upload className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Import CSV</span><span className="sm:hidden">Import</span></Button>
+          <Button variant="outline" size="sm" onClick={() => { setBulkOpen(true); setCsvRows([]); setBulkResult(null); setBulkImportClassIds([]); setBulkImportClassDropdown(false); }} className="text-xs"><Upload className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Import CSV</span><span className="sm:hidden">Import</span></Button>
           <Button size="sm" onClick={openCreate} className="text-xs"><Plus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Add Student</span><span className="sm:hidden">Add</span></Button>
         </div>
       </div>
@@ -335,6 +359,17 @@ ${cardHtml(qrStudent, qrDataUrl)}
         </div>
       </div>
 
+      {/* Bulk Action Bar */}
+      {selectedStudentIds.size > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-primary/5 border border-primary/20 rounded-2xl p-3 mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg">{selectedStudentIds.size} selected</span>
+            <button onClick={() => setSelectedStudentIds(new Set())} className="text-xs font-semibold text-text-muted hover:text-text">Clear</button>
+          </div>
+          <Button size="sm" onClick={() => { setBulkAssignOpen(true); setBulkAssignClassIds([]); setBulkAssignClassDropdown(false); setBulkAssignClassSearch(""); }} className="text-xs"><Layers className="h-3.5 w-3.5" /> Assign Classes</Button>
+        </motion.div>
+      )}
+
       {/* Table */}
       {!filtered.length && !loading ? (
         <div className="bg-bg-card rounded-2xl shadow-sm border border-border p-12 text-center">
@@ -346,10 +381,11 @@ ${cardHtml(qrStudent, qrDataUrl)}
           {/* Desktop */}
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
-              <thead><tr className="border-b border-border">{["Student", "Code", "Grade", "Attendance", "Classes", "Status", "Action"].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
+              <thead><tr className="border-b border-border"><th className="px-3 py-3.5 w-10"><input type="checkbox" checked={paginated.length > 0 && selectedStudentIds.size === paginated.length} onChange={toggleSelectAll} className="rounded border-border text-primary focus:ring-primary/20 cursor-pointer" /></th>{["Student", "Code", "Grade", "Attendance", "Classes", "Status", "Action"].map(h => (<th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">{h}</th>))}</tr></thead>
               <tbody>
                 {paginated.map(s => (
-                  <tr key={s.id} className="border-b border-border/50 hover:bg-bg/50 transition-colors">
+                  <tr key={s.id} className={`border-b border-border/50 hover:bg-bg/50 transition-colors ${selectedStudentIds.has(s.id) ? "bg-primary/[0.03]" : ""}`}>
+                    <td className="px-3 py-3.5 w-10"><input type="checkbox" checked={selectedStudentIds.has(s.id)} onChange={() => toggleSelectStudent(s.id)} className="rounded border-border text-primary focus:ring-primary/20 cursor-pointer" /></td>
                     <td className="px-5 py-3.5">
                       <p className="text-sm font-medium text-text">{s.fullName}</p>
                       {s.address && <p className="text-xs text-text-muted truncate max-w-[200px]">{s.address}</p>}
@@ -414,9 +450,12 @@ ${cardHtml(qrStudent, qrDataUrl)}
           {/* Mobile */}
           <div className="lg:hidden">
             {paginated.map((s, i) => (
-              <div key={s.id} className={`p-4 ${i % 2 === 0 ? "bg-bg-card" : "bg-bg/60"} ${i < paginated.length - 1 ? "border-b-2 border-border/80" : ""}`}>
+              <div key={s.id} className={`p-4 ${i % 2 === 0 ? "bg-bg-card" : "bg-bg/60"} ${i < paginated.length - 1 ? "border-b-2 border-border/80" : ""} ${selectedStudentIds.has(s.id) ? "bg-primary/[0.03]" : ""}`}>
                 <div className="flex gap-3">
-                  <div className={`w-1 rounded-full flex-shrink-0 ${s.isActive ? "bg-success" : "bg-danger"}`} />
+                  <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                    <input type="checkbox" checked={selectedStudentIds.has(s.id)} onChange={() => toggleSelectStudent(s.id)} className="rounded border-border text-primary focus:ring-primary/20 cursor-pointer mt-1" />
+                    <div className={`w-1 flex-1 rounded-full ${s.isActive ? "bg-success" : "bg-danger"}`} />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div><p className="font-semibold text-text text-sm truncate">{s.fullName}</p><p className="text-[10px] text-text-muted font-mono">{s.studentCode}</p><p className="text-[10px] text-slate-400">Joined {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p></div>
@@ -968,7 +1007,7 @@ ${cardHtml(qrStudent, qrDataUrl)}
                     <button onClick={() => setCsvRows([])} className="text-xs font-semibold text-danger hover:underline">Clear</button>
                   </div>
                   <div className="rounded-xl border border-border overflow-hidden -mx-1 sm:mx-0">
-                    <div className="overflow-x-auto max-h-[250px] overflow-y-auto">
+                    <div className="overflow-x-auto max-h-[200px] overflow-y-auto">
                       <table className="w-full text-xs" style={{ minWidth: 500 }}>
                         <thead><tr className="bg-bg border-b border-border">
                           {["#", "Name", "Grade", "Address", "Parent", "Phone", "Rel."].map(h => (
@@ -1020,19 +1059,116 @@ ${cardHtml(qrStudent, qrDataUrl)}
           )}
         </div>
 
+        {/* Assign classes to all imported students */}
+        {!bulkResult && csvRows.length > 0 && (
+          <div className="px-3 sm:px-6 pb-4">
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Assign Classes to All Imported Students <span className="text-text-muted/40">(optional)</span></p>
+            {bulkImportClassIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {bulkImportClassIds.map(id => { const cls = (classes ?? []).find(c => c.id === id); if (!cls) return null; return (
+                  <span key={id} className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary/10 text-primary">{cls.name}<button type="button" onClick={() => setBulkImportClassIds(bulkImportClassIds.filter(cid => cid !== id))} className="hover:bg-primary/20 rounded-full p-0.5"><X className="w-3 h-3" /></button></span>
+                ); })}
+              </div>
+            )}
+            <div className="relative">
+              <button type="button" onClick={() => { setBulkImportClassDropdown(!bulkImportClassDropdown); setBulkImportClassSearch(""); }}
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${bulkImportClassDropdown ? "border-primary ring-2 ring-primary/20" : "border-border hover:border-primary/30"} bg-bg-card`}>
+                <div className="flex items-center gap-2.5"><BookOpen className="w-4 h-4 text-text-muted/50" /><span className={bulkImportClassIds.length ? "text-text" : "text-text-muted"}>{bulkImportClassIds.length ? `${bulkImportClassIds.length} class${bulkImportClassIds.length > 1 ? "es" : ""}` : "Select classes..."}</span></div>
+                <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${bulkImportClassDropdown ? "rotate-180" : ""}`} />
+              </button>
+              <AnimatePresence>
+                {bulkImportClassDropdown && (<>
+                  <div className="fixed inset-0 z-30" onClick={() => setBulkImportClassDropdown(false)} />
+                  <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="absolute left-0 right-0 bottom-full mb-1.5 z-40 bg-bg-card rounded-xl border border-border shadow-xl overflow-hidden">
+                    <div className="p-2 border-b border-border"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" /><input value={bulkImportClassSearch} onChange={e => setBulkImportClassSearch(e.target.value)} placeholder="Search classes..." autoFocus className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-bg text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20" /></div></div>
+                    <div className="max-h-[180px] overflow-y-auto p-1.5">
+                      {(classes ?? []).filter(c => !bulkImportClassSearch.trim() || c.name.toLowerCase().includes(bulkImportClassSearch.toLowerCase())).map(c => {
+                        const selected = bulkImportClassIds.includes(c.id);
+                        return (<button type="button" key={c.id} onClick={() => setBulkImportClassIds(selected ? bulkImportClassIds.filter(id => id !== c.id) : [...bulkImportClassIds, c.id])}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${selected ? "bg-primary/[0.07]" : "hover:bg-bg/80"}`}>
+                          <div className={`w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${selected ? "bg-primary border-primary" : "border-border bg-bg-card"}`} style={{ width: 18, height: 18 }}>
+                            {selected && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                          </div>
+                          <span className={`text-sm font-medium flex-1 ${selected ? "text-primary" : "text-text"}`}>{c.name}</span>
+                          {c.grade && <span className="text-[10px] font-semibold text-text-muted bg-bg px-2 py-0.5 rounded-md">G{c.grade}</span>}
+                        </button>);
+                      })}
+                    </div>
+                  </motion.div>
+                </>)}
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-bg/40">
           <Button variant="ghost" onClick={() => setBulkOpen(false)}>{bulkResult ? "Close" : "Cancel"}</Button>
           {!bulkResult && csvRows.length > 0 && (
             <Button loading={bulkImporting} onClick={async () => {
               setBulkImporting(true);
               try {
-                const result = await bulkImportStudents({ students: csvRows });
+                const result = await bulkImportStudents({ students: csvRows.map(r => ({ ...r, classIds: bulkImportClassIds.length ? bulkImportClassIds : undefined })) });
                 setBulkResult(result);
                 refetch();
               } catch { toast.error("Import failed"); }
               finally { setBulkImporting(false); }
             }}><Upload className="h-4 w-4" /> Import {csvRows.length} Students</Button>
           )}
+        </div>
+      </Modal>
+
+      {/* Bulk Assign Classes Modal */}
+      <Modal open={bulkAssignOpen} onClose={() => { setBulkAssignOpen(false); setBulkAssignClassDropdown(false); }} title="" className="max-w-md p-0">
+        <div className="bg-gradient-to-r from-indigo-600 to-violet-700 px-6 py-5 rounded-t-2xl">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center"><Layers className="w-5 h-5 text-white" /></div>
+            <div>
+              <h2 className="text-white font-semibold text-base">Bulk Assign Classes</h2>
+              <p className="text-white/60 text-xs mt-0.5">{selectedStudentIds.size} student{selectedStudentIds.size > 1 ? "s" : ""} selected</p>
+            </div>
+          </div>
+        </div>
+        <div className={`px-6 py-5 ${bulkAssignClassDropdown ? "overflow-visible" : ""}`}>
+          <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-3">Select Classes to Assign</p>
+          {bulkAssignClassIds.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
+              {bulkAssignClassIds.map(id => { const cls = (classes ?? []).find(c => c.id === id); if (!cls) return null; return (
+                <span key={id} className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary/10 text-primary">{cls.name}<button type="button" onClick={() => setBulkAssignClassIds(bulkAssignClassIds.filter(cid => cid !== id))} className="hover:bg-primary/20 rounded-full p-0.5"><X className="w-3 h-3" /></button></span>
+              ); })}
+            </div>
+          )}
+          <div className="relative">
+            <button type="button" onClick={() => { setBulkAssignClassDropdown(!bulkAssignClassDropdown); setBulkAssignClassSearch(""); }}
+              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${bulkAssignClassDropdown ? "border-primary ring-2 ring-primary/20" : "border-border hover:border-primary/30"} bg-bg-card`}>
+              <div className="flex items-center gap-2.5"><BookOpen className="w-4 h-4 text-text-muted/50" /><span className={bulkAssignClassIds.length ? "text-text" : "text-text-muted"}>{bulkAssignClassIds.length ? `${bulkAssignClassIds.length} class${bulkAssignClassIds.length > 1 ? "es" : ""}` : "Select classes..."}</span></div>
+              <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${bulkAssignClassDropdown ? "rotate-180" : ""}`} />
+            </button>
+            <AnimatePresence>
+              {bulkAssignClassDropdown && (<>
+                <div className="fixed inset-0 z-30" onClick={() => setBulkAssignClassDropdown(false)} />
+                <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-bg-card rounded-xl border border-border shadow-xl overflow-hidden">
+                  <div className="p-2 border-b border-border"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" /><input value={bulkAssignClassSearch} onChange={e => setBulkAssignClassSearch(e.target.value)} placeholder="Search classes..." autoFocus className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-bg text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20" /></div></div>
+                  <div className="max-h-[180px] overflow-y-auto p-1.5">
+                    {(classes ?? []).filter(c => !bulkAssignClassSearch.trim() || c.name.toLowerCase().includes(bulkAssignClassSearch.toLowerCase())).map(c => {
+                      const selected = bulkAssignClassIds.includes(c.id);
+                      return (<button type="button" key={c.id} onClick={() => setBulkAssignClassIds(selected ? bulkAssignClassIds.filter(id => id !== c.id) : [...bulkAssignClassIds, c.id])}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${selected ? "bg-primary/[0.07]" : "hover:bg-bg/80"}`}>
+                        <div className={`w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${selected ? "bg-primary border-primary" : "border-border bg-bg-card"}`} style={{ width: 18, height: 18 }}>
+                          {selected && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </div>
+                        <span className={`text-sm font-medium flex-1 ${selected ? "text-primary" : "text-text"}`}>{c.name}</span>
+                        {c.grade && <span className="text-[10px] font-semibold text-text-muted bg-bg px-2 py-0.5 rounded-md">G{c.grade}</span>}
+                      </button>);
+                    })}
+                  </div>
+                </motion.div>
+              </>)}
+            </AnimatePresence>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-bg/40">
+          <Button variant="ghost" onClick={() => setBulkAssignOpen(false)}>Cancel</Button>
+          <Button loading={bulkAssigning} onClick={handleBulkAssign} disabled={!bulkAssignClassIds.length}><Layers className="h-4 w-4" /> Assign to {selectedStudentIds.size} Students</Button>
         </div>
       </Modal>
 
