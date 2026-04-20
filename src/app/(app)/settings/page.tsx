@@ -63,10 +63,12 @@ export default function SettingsPage() {
   const [smsMsg, setSmsMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [smsTemplate, setSmsTemplate] = useState("");
   const [smsPreview, setSmsPreview] = useState<SmsTemplateData | null>(null);
+  const [savedSmsTemplate, setSavedSmsTemplate] = useState("");
   const [templateSaving, setTemplateSaving] = useState(false);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [absentTemplate, setAbsentTemplate] = useState("");
   const [absentPreview, setAbsentPreview] = useState<SmsTemplateData | null>(null);
+  const [savedAbsentTemplate, setSavedAbsentTemplate] = useState("");
   const [absentTemplateSaving, setAbsentTemplateSaving] = useState(false);
   const absentPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -74,8 +76,8 @@ export default function SettingsPage() {
   const profileDirty = profile ? (name !== (profile.name ?? "") || phone !== (profile.phone ?? "") || subject !== (profile.subject ?? "")) : false;
   const passwordDirty = !!(currentPassword || newPassword || confirmPassword);
   const smsDirty = profile ? smsNotificationsEnabled !== (profile.smsNotificationsEnabled ?? true) : false;
-  const smsTemplateDirty = smsPreview ? smsTemplate !== smsPreview.template : false;
-  const absentTemplateDirty = absentPreview ? absentTemplate !== absentPreview.template : false;
+  const smsTemplateDirty = smsTemplate !== savedSmsTemplate;
+  const absentTemplateDirty = absentTemplate !== savedAbsentTemplate;
   const academicDirty = academicConfig ? nextUpgradeDate !== (academicConfig.nextUpgradeDate ?? "") : false;
   const anyDirty = profileDirty || passwordDirty || smsDirty || smsTemplateDirty || absentTemplateDirty || academicDirty;
 
@@ -96,8 +98,8 @@ export default function SettingsPage() {
     if (profile) { setName(profile.name ?? ""); setPhone(profile.phone ?? ""); setSubject(profile.subject ?? ""); setEmail(profile.email ?? ""); setSmsNotificationsEnabled(profile.smsNotificationsEnabled ?? true); }
     setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
     if (academicConfig) setNextUpgradeDate(academicConfig.nextUpgradeDate ?? "");
-    if (smsPreview) setSmsTemplate(smsPreview.template);
-    if (absentPreview) setAbsentTemplate(absentPreview.template);
+    if (savedSmsTemplate) setSmsTemplate(savedSmsTemplate);
+    if (savedAbsentTemplate) setAbsentTemplate(savedAbsentTemplate);
     setProfileMsg(null); setPwMsg(null); setSmsMsg(null); setAcademicMsg(null);
   };
 
@@ -116,10 +118,12 @@ export default function SettingsPage() {
     if (tab === "sms" && !smsPreview) {
       getSmsTemplate().then(data => {
         setSmsTemplate(data.template);
+        setSavedSmsTemplate(data.template);
         setSmsPreview(data);
       }).catch(() => {});
       getSmsAbsentTemplate().then(data => {
         setAbsentTemplate(data.template);
+        setSavedAbsentTemplate(data.template);
         setAbsentPreview(data);
       }).catch(() => {});
     }
@@ -280,6 +284,7 @@ export default function SettingsPage() {
     try {
       const data = await updateSmsTemplate(smsTemplate);
       setSmsPreview(data);
+      setSavedSmsTemplate(smsTemplate);
       setSmsMsg({ type: "success", text: "SMS template saved" });
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -310,6 +315,7 @@ export default function SettingsPage() {
     try {
       const data = await updateSmsAbsentTemplate(absentTemplate);
       setAbsentPreview(data);
+      setSavedAbsentTemplate(absentTemplate);
       setSmsMsg({ type: "success", text: "Absent SMS template saved" });
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
