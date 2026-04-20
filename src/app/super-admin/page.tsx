@@ -85,7 +85,7 @@ export default function SuperAdminDashboardPage() {
                     {data.smsProfile.apiToken}
                   </code>
                   <button
-                    onClick={() => copyApiToken(data.smsProfile.apiToken)}
+                    onClick={() => copyApiToken(data?.smsProfile?.apiToken??"")}
                     className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors flex-shrink-0"
                   >
                     {copiedToken ? 'Copied!' : 'Copy'}
