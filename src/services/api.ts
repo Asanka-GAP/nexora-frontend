@@ -233,6 +233,9 @@ export const updateSmsSettings = (data: { smsNotificationsEnabled: boolean }) =>
 export const getCurrentMonthUsage = () =>
   api.get<ApiResponse<CurrentMonthUsage>>("/billing/current-month").then((r) => r.data.data);
 
+export const getBillingPaymentInfo = () =>
+  api.get<ApiResponse<{ accountHolder: string; bank: string; branch: string; accountNumber: string; dueDays: number; whatsapp: string }>>("/billing/payment-info").then((r) => r.data.data);
+
 export const getBillingHistory = () =>
   api.get<ApiResponse<BillingHistory>>("/billing/history").then((r) => r.data.data);
 

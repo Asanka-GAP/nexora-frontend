@@ -16,15 +16,24 @@ import {
   Smartphone,
   ChevronDown,
   FileText,
-  Loader2
+  Loader2,
+  Building2,
+  Copy,
+  CheckCheck
 } from 'lucide-react';
 import { CurrentMonthUsage, BillingHistory } from '@/lib/types';
-import { getCurrentMonthUsage, getBillingHistory, exportBillingReport } from '@/services/api';
+import { getCurrentMonthUsage, getBillingHistory, exportBillingReport, getBillingPaymentInfo } from '@/services/api';
 import PageSkeleton from '@/components/ui/PageSkeleton';
+import { useAuth } from '@/lib/auth';
+import { useTheme } from '@/lib/theme';
 
 export default function BillingPage() {
+  const { user } = useAuth();
+  const { theme } = useTheme();
+  const dk = theme === 'dark';
   const [currentMonth, setCurrentMonth] = useState<CurrentMonthUsage | null>(null);
   const [billingHistory, setBillingHistory] = useState<BillingHistory | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<{ accountHolder: string; bank: string; branch: string; accountNumber: string; dueDays: number; whatsapp: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [exportOpen, setExportOpen] = useState(false);
@@ -33,6 +42,7 @@ export default function BillingPage() {
   const [exporting, setExporting] = useState(false);
   const [yearOpen, setYearOpen] = useState(false);
   const [monthOpen, setMonthOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const PAGE_SIZE = 5;
 
   useEffect(() => {
@@ -44,15 +54,21 @@ export default function BillingPage() {
       setLoading(true);
       const [currentResponse, historyResponse] = await Promise.all([
         getCurrentMonthUsage(),
-        getBillingHistory()
+        getBillingHistory(),
       ]);
-      
       setCurrentMonth(currentResponse);
       setBillingHistory(historyResponse);
     } catch (error) {
       console.error('Failed to fetch billing data:', error);
     } finally {
       setLoading(false);
+    }
+    // Fetch payment info separately so it doesn't break the main billing data
+    try {
+      const paymentInfoResponse = await getBillingPaymentInfo();
+      setPaymentInfo(paymentInfoResponse);
+    } catch (error) {
+      console.error('Failed to fetch payment info:', error);
     }
   };
 
@@ -194,6 +210,89 @@ export default function BillingPage() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Payment Info Banner */}
+      {paymentInfo && (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+          className={`relative rounded-2xl overflow-hidden border shadow-[0_2px_16px_rgba(16,185,129,0.12)] ${
+            dk ? 'border-emerald-500/20' : 'border-emerald-200/60'
+          }`}>
+          <div className={`absolute inset-0 ${
+            dk ? 'bg-gradient-to-br from-emerald-950/40 via-teal-950/30 to-cyan-950/20'
+               : 'bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50'
+          }`} />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-emerald-200/20 to-transparent rounded-full -translate-y-24 translate-x-24" />
+          <div className="absolute bottom-0 left-0 w-40 h-40 bg-gradient-to-tr from-teal-200/15 to-transparent rounded-full translate-y-16 -translate-x-16" />
+          <div className="relative p-5 sm:p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md flex-shrink-0">
+                <Building2 className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[10px] font-bold uppercase tracking-widest ${
+                  dk ? 'text-emerald-400' : 'text-emerald-600'
+                }`}>Payment Instructions</p>
+                <h3 className={`text-sm font-bold mt-0.5 ${
+                  dk ? 'text-slate-100' : 'text-slate-800'
+                }`}>Pay your monthly bill via bank transfer to the following account</h3>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              {[
+                { label: 'Account Holder', value: paymentInfo.accountHolder },
+                { label: 'Bank', value: paymentInfo.bank },
+                { label: 'Branch', value: paymentInfo.branch },
+              ].map(item => (
+                <div key={item.label} className={`rounded-xl px-3.5 py-3 border ${
+                  dk ? 'bg-white/5 border-emerald-500/15' : 'bg-white/70 border-emerald-100/80'
+                }`}>
+                  <p className={`text-[9px] font-bold uppercase tracking-wider mb-1 ${
+                    dk ? 'text-emerald-400/70' : 'text-emerald-600/60'
+                  }`}>{item.label}</p>
+                  <p className={`text-xs font-bold leading-tight ${
+                    dk ? 'text-slate-100' : 'text-slate-800'
+                  }`}>{item.value}</p>
+                </div>
+              ))}
+              <div className={`rounded-xl px-3.5 py-3 border ${
+                dk ? 'bg-white/5 border-emerald-500/15' : 'bg-white/70 border-emerald-100/80'
+              }`}>
+                <p className={`text-[9px] font-bold uppercase tracking-wider mb-1 ${
+                  dk ? 'text-emerald-400/70' : 'text-emerald-600/60'
+                }`}>Account Number</p>
+                <div className="flex items-center justify-between gap-1">
+                  <p className={`text-xs font-bold font-mono tracking-wide ${
+                    dk ? 'text-slate-100' : 'text-slate-800'
+                  }`}>{paymentInfo.accountNumber}</p>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(paymentInfo.accountNumber); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                    className={`flex-shrink-0 p-1 rounded-lg transition-colors ${
+                      dk ? 'hover:bg-emerald-500/20' : 'hover:bg-emerald-100'
+                    }`} title="Copy account number">
+                    {copied
+                      ? <CheckCheck className={`w-3.5 h-3.5 ${dk ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                      : <Copy className={`w-3.5 h-3.5 ${dk ? 'text-emerald-400' : 'text-emerald-500'}`} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className={`flex items-center gap-2.5 rounded-xl px-4 py-3 border ${
+              dk ? 'bg-green-500/10 border-green-500/20' : 'bg-green-50/80 border-green-200/60'
+            }`}>
+              <svg viewBox="0 0 24 24" className={`w-4 h-4 flex-shrink-0 ${
+                dk ? 'fill-green-400' : 'fill-green-600'
+              }`} xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.858L.057 23.428a.75.75 0 0 0 .916.916l5.57-1.476A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.443l-.374-.222-3.875 1.027 1.027-3.875-.222-.374A9.953 9.953 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+              <p className={`text-xs ${dk ? 'text-slate-300' : 'text-slate-600'}`}>
+                After payment, send your slip to WhatsApp{' '}
+                <span className={`font-bold ${dk ? 'text-green-400' : 'text-green-700'}`}>{paymentInfo.whatsapp}</span>{' '}
+                with your username{' '}
+                <span className={`font-bold ${dk ? 'text-slate-100' : 'text-slate-800'}`}>({user?.username})</span>{' '}
+                as the reference.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Current Month Overview - Stat Cards */}
       {currentMonth && (
