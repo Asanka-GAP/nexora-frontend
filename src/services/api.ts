@@ -175,6 +175,21 @@ export const getTeacherBilling = (id: string) =>
 export const updateTeacherPaymentStatus = (id: string, yearMonth: string, paymentStatus: string) =>
   api.patch<ApiResponse<void>>(`/admin/teachers/${id}/billing/payment-status`, { yearMonth, paymentStatus });
 
+export const adminBulkImportStudents = (teacherId: string, data: { students: { fullName: string; currentGrade: number; address?: string; parentName?: string; parentPhone?: string; parentRelationship?: string; classIds?: string[] }[] }) =>
+  api.post<ApiResponse<{ total: number; success: number; failed: number; errors: string[] }>>(`/admin/teachers/${teacherId}/students/bulk-import`, data).then((r) => r.data.data);
+
+export const adminGetTeacherClasses = (teacherId: string) =>
+  api.get<ApiResponse<ClassItem[]>>(`/admin/teachers/${teacherId}/classes`).then((r) => r.data.data);
+
+export const adminCreateTeacherClass = (teacherId: string, data: ClassCreateRequest) =>
+  api.post<ApiResponse<ClassItem>>(`/admin/teachers/${teacherId}/classes`, data).then((r) => r.data.data);
+
+export const adminGetTeacherStudents = (teacherId: string) =>
+  api.get<ApiResponse<Student[]>>(`/admin/teachers/${teacherId}/students`).then((r) => r.data.data);
+
+export const adminBulkAssignClasses = (teacherId: string, data: { studentIds: string[]; classIds: string[] }) =>
+  api.post<ApiResponse<{ studentsProcessed: number; enrollmentsCreated: number; skippedDuplicates: number }>>(`/admin/teachers/${teacherId}/students/bulk-assign-classes`, data).then((r) => r.data.data);
+
 // Teacher Settings
 export const getTeacherProfile = () =>
   api.get<ApiResponse<TeacherProfile>>("/settings/profile").then((r) => r.data.data);
