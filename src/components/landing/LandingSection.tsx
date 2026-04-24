@@ -6,7 +6,7 @@ import { AttendanceMockup } from "./AttendanceMockup";
 import { NotificationMockup } from "./NotificationMockup";
 import { ResponsiveMockup } from "./ResponsiveMockup";
 
-const fadeUp = { hidden: { opacity: 0, y: 32 }, show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } } };
+const fadeUp = { hidden: { opacity: 0, y: 32 }, show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as const } } };
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.12 } } };
 
 const features = [
