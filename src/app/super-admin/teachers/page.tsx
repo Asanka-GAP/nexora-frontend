@@ -27,8 +27,10 @@ export default function TeachersPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [statusDropdown]);
 
-  const load = () => { getTeachers().then(setTeachers).catch(() => {}).finally(() => setLoading(false)); };
-  useEffect(load, []);
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const load = () => { getTeachers(statusFilter || undefined).then(setTeachers).catch(() => {}).finally(() => setLoading(false)); };
+  useEffect(load, [statusFilter]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,9 +92,16 @@ export default function TeachersPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div><h2 className="text-lg font-semibold text-white">Teachers</h2><p className="text-xs text-slate-500">{teachers.length} total</p></div>
-        <button onClick={() => setModalOpen(true)} className="px-4 py-2 rounded-xl text-sm font-semibold text-white cursor-pointer" style={{ background: "linear-gradient(135deg, #4F46E5, #3730A3)" }}>+ Add Teacher</button>
+        <div className="flex items-center gap-3">
+          <div className="grid grid-cols-3 rounded-xl overflow-hidden border border-slate-700 text-xs font-semibold flex-1 sm:flex-none">
+            {(["" , "ACTIVE", "INACTIVE"] as const).map((s) => (
+              <button key={s} onClick={() => setStatusFilter(s)} className={`py-2 cursor-pointer transition-colors text-center ${ statusFilter === s ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400 hover:text-white" }`}>{s === "" ? "All" : s === "ACTIVE" ? "Active" : "Inactive"}</button>
+            ))}
+          </div>
+          <button onClick={() => setModalOpen(true)} className="px-4 py-2 rounded-xl text-sm font-semibold text-white cursor-pointer whitespace-nowrap" style={{ background: "linear-gradient(135deg, #4F46E5, #3730A3)" }}>+ Add</button>
+        </div>
       </div>
 
       {loading ? (
@@ -101,13 +110,14 @@ export default function TeachersPage() {
         <div className="bg-slate-900 rounded-2xl border border-slate-800 p-12 text-center"><p className="text-slate-500">No teachers yet. Add your first teacher.</p></div>
       ) : (
         <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden">
-          <div className="overflow-x-auto">
+
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-slate-800 text-left">
                 <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Name</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Subject</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Username</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Email</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Username</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell">First Login</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Actions</th>
@@ -115,10 +125,12 @@ export default function TeachersPage() {
               <tbody className="divide-y divide-slate-800">
                 {teachers.map(t => (
                   <tr key={t.id} className="hover:bg-slate-800/50 transition-colors">
-                    <td className="px-4 py-3 text-slate-200 font-medium">{t.name}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-slate-200">{t.name}</div>
+                      <div className="text-xs text-slate-500">{t.email}</div>
+                    </td>
                     <td className="px-4 py-3"><span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400">{t.subject || "—"}</span></td>
-                    <td className="px-4 py-3 text-slate-400 hidden md:table-cell">{t.username}</td>
-                    <td className="px-4 py-3 text-slate-400 hidden sm:table-cell">{t.email}</td>
+                    <td className="px-4 py-3 text-slate-400">{t.username}</td>
                     <td className="px-4 py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>{t.status}</span></td>
                     <td className="px-4 py-3 hidden lg:table-cell"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.firstLogin ? "bg-amber-500/10 text-amber-400" : "bg-slate-800 text-slate-400"}`}>{t.firstLogin ? "Pending" : "Done"}</span></td>
                     <td className="px-4 py-3">
@@ -133,6 +145,40 @@ export default function TeachersPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Cards */}
+          <div className="md:hidden divide-y divide-slate-800">
+            {teachers.map(t => (
+              <div key={t.id} className="p-4">
+                <div className="flex gap-3">
+                  <div className="w-1 rounded-full flex-shrink-0" style={{ backgroundColor: t.status === "ACTIVE" ? "#10b981" : "#ef4444" }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="font-medium text-slate-200">{t.name}</p>
+                        <p className="text-xs text-slate-500">{t.email}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>{t.status}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400">{t.subject || "—"}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <span className="text-[10px] text-slate-500">@{t.username}</span>
+                      <span className="text-slate-700">·</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${t.firstLogin ? "bg-amber-500/10 text-amber-400" : "bg-slate-800 text-slate-400"}`}>{t.firstLogin ? "First login pending" : "Login done"}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button onClick={() => handleViewBilling(t)} className="py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 cursor-pointer transition-colors text-center">Billing</button>
+                      <button onClick={() => handleToggle(t.id)} className="py-1.5 rounded-lg text-[11px] font-semibold bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 cursor-pointer transition-colors text-center">{t.status === "ACTIVE" ? "Disable" : "Enable"}</button>
+                      <button onClick={() => setDeleteTarget(t)} className="py-1.5 rounded-lg text-[11px] font-semibold bg-red-500/10 text-red-400 hover:bg-red-500/20 cursor-pointer transition-colors text-center">Delete</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
         </div>
       )}
 
@@ -347,47 +393,44 @@ export default function TeachersPage() {
 
                       {/* Mobile Cards */}
                       <div className="lg:hidden divide-y divide-slate-700">
-                        {billingData.billingHistory.monthlyBills.slice(0, 10).map((bill, i) => (
+                        {billingData.billingHistory.monthlyBills.slice(0, 10).map((bill) => (
                           <div key={bill.month} className="p-4">
-                            <div className="flex items-start justify-between mb-3">
-                              <div>
-                                <p className="font-medium text-slate-200">{bill.monthDisplay}</p>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <p className="text-xs text-slate-500">{bill.month}</p>
-                                  <button onClick={() => setStatusDropdown(statusDropdown === `m-${bill.month}` ? null : `m-${bill.month}`)} className={`text-[9px] font-bold px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${paymentStatusStyle(bill.paymentStatus)}`}>{bill.paymentStatus}</button>
-                                </div>
-                                {statusDropdown === `m-${bill.month}` && (
-                                  <div className="mt-2 w-full bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-xl z-20">
-                                    {paymentStatuses.map(s => (
-                                      <button key={s} onClick={() => handlePaymentStatusChange(bill.month, s)} className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors cursor-pointer flex items-center justify-between ${s === bill.paymentStatus ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
-                                        {s}
-                                        {s === bill.paymentStatus && <svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>}
-                                      </button>
-                                    ))}
+                            <div className="flex gap-3">
+                              <div className="w-1 rounded-full flex-shrink-0" style={{ backgroundColor: bill.paymentStatus === "PAID" ? "#10b981" : bill.paymentStatus === "OVERDUE" ? "#ef4444" : "#f59e0b" }} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between mb-3">
+                                  <div>
+                                    <p className="font-medium text-slate-200">{bill.monthDisplay}</p>
+                                    <p className="text-xs text-slate-500">{bill.month}</p>
                                   </div>
-                                )}
-                              </div>
-                              <div className="text-right">
-                                <p className="font-bold text-lg text-indigo-400">{formatCurrency(bill.totalCost)}</p>
-                                <p className="text-xs text-slate-500">Total</p>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="bg-slate-700/50 rounded-lg p-3">
-                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Messages</p>
-                                <p className="text-sm font-medium text-slate-200 mt-1">{bill.messagesSent}</p>
-                              </div>
-                              <div className="bg-slate-700/50 rounded-lg p-3">
-                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">SMS Units</p>
-                                <p className="text-sm font-medium text-slate-200 mt-1">{bill.smsUnits}</p>
-                              </div>
-                              <div className="bg-slate-700/50 rounded-lg p-3">
-                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">SMS Cost</p>
-                                <p className="text-sm font-medium text-slate-200 mt-1">{formatCurrency(bill.smsCost)}</p>
-                              </div>
-                              <div className="bg-slate-700/50 rounded-lg p-3">
-                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Software</p>
-                                <p className="text-sm font-medium text-slate-200 mt-1">{formatCurrency(bill.softwareCost)}</p>
+                                  <div className="text-right">
+                                    <p className="font-bold text-indigo-400">{formatCurrency(bill.totalCost)}</p>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${paymentStatusStyle(bill.paymentStatus)}`}>{bill.paymentStatus}</span>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 mb-3">
+                                  <div className="bg-slate-700/50 rounded-lg p-2">
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Messages</p>
+                                    <p className="text-xs font-medium text-slate-200 mt-0.5">{bill.messagesSent}</p>
+                                  </div>
+                                  <div className="bg-slate-700/50 rounded-lg p-2">
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">SMS Units</p>
+                                    <p className="text-xs font-medium text-slate-200 mt-0.5">{bill.smsUnits}</p>
+                                  </div>
+                                  <div className="bg-slate-700/50 rounded-lg p-2">
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">SMS Cost</p>
+                                    <p className="text-xs font-medium text-slate-200 mt-0.5">{formatCurrency(bill.smsCost)}</p>
+                                  </div>
+                                  <div className="bg-slate-700/50 rounded-lg p-2">
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Software</p>
+                                    <p className="text-xs font-medium text-slate-200 mt-0.5">{formatCurrency(bill.softwareCost)}</p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  {paymentStatuses.map(s => (
+                                    <button key={s} onClick={() => handlePaymentStatusChange(bill.month, s)} className={`py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors text-center ${ s === bill.paymentStatus ? (s === "PAID" ? "bg-emerald-500/30 text-emerald-300" : s === "OVERDUE" ? "bg-red-500/30 text-red-300" : "bg-amber-500/30 text-amber-300") : (s === "PAID" ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" : s === "OVERDUE" ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20") }`}>{s === "PAID" ? "Paid" : s === "PENDING" ? "Pending" : "Overdue"}</button>
+                                  ))}
+                                </div>
                               </div>
                             </div>
                           </div>

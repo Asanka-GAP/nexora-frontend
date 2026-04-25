@@ -3,7 +3,7 @@ import type {
   ApiResponse, Student, StudentCreateRequest, ClassItem,
   ClassCreateRequest, MarkAttendanceRequest, MarkAttendanceResponse, Schedule,
   AttendanceRecord, LoginResponse, AdminDashboard, TeacherItem, TeacherProfile,
-  CurrentMonthUsage, BillingHistory,
+  CurrentMonthUsage, BillingHistory, AdminBillingSummary,
 } from "@/lib/types";
 
 const api = axios.create({
@@ -157,8 +157,11 @@ export const reactivateSchedule = (id: string, reason?: string) =>
 export const getAdminDashboard = () =>
   api.get<ApiResponse<AdminDashboard>>("/admin/dashboard").then((r) => r.data.data);
 
-export const getTeachers = () =>
-  api.get<ApiResponse<TeacherItem[]>>("/admin/teachers").then((r) => r.data.data);
+export const getAdminBilling = (month?: string) =>
+  api.get<ApiResponse<AdminBillingSummary>>("/admin/billing", { params: month ? { month } : {} }).then((r) => r.data.data);
+
+export const getTeachers = (status?: string) =>
+  api.get<ApiResponse<TeacherItem[]>>("/admin/teachers", { params: status ? { status } : {} }).then((r) => r.data.data);
 
 export const createTeacher = (data: { name: string; email: string; phone: string; subject: string }) =>
   api.post<ApiResponse<TeacherItem>>("/admin/teachers", data).then((r) => r.data.data);

@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Upload, X, UserCheck, ChevronDown } from "lucide-react";
-import { getTeachers, adminBulkImportStudents } from "@/services/api";
-import type { TeacherItem } from "@/lib/types";
+import { Upload, X, UserCheck, ChevronDown, BookOpen, Search } from "lucide-react";
+import { getTeachers, adminBulkImportStudents, adminGetTeacherClasses } from "@/services/api";
+import type { TeacherItem, ClassItem } from "@/lib/types";
 
 type CsvRow = { fullName: string; currentGrade: number; address: string; parentName: string; parentPhone: string; parentRelationship: string };
 type BulkResult = { total: number; success: number; failed: number; errors: string[] };
@@ -20,6 +20,10 @@ export default function AdminStudentsPage() {
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
+  const [teacherClasses, setTeacherClasses] = useState<ClassItem[]>([]);
+  const [classIds, setClassIds] = useState<string[]>([]);
+  const [classDropdown, setClassDropdown] = useState(false);
+  const [classSearch, setClassSearch] = useState("");
 
   useEffect(() => {
     getTeachers()
@@ -48,7 +52,7 @@ export default function AdminStudentsPage() {
     if (!csvRows.length) { toast.error("Upload a CSV file first"); return; }
     setBulkImporting(true);
     try {
-      const result = await adminBulkImportStudents(selectedTeacher.id, { students: csvRows });
+      const result = await adminBulkImportStudents(selectedTeacher.id, { students: csvRows.map(r => ({ ...r, classIds: classIds.length ? classIds : undefined })) });
       setBulkResult(result);
       toast.success(`${result.success} of ${result.total} students imported`);
     } catch {
@@ -58,7 +62,7 @@ export default function AdminStudentsPage() {
     }
   };
 
-  const reset = () => { setCsvRows([]); setBulkResult(null); };
+  const reset = () => { setCsvRows([]); setBulkResult(null); setClassIds([]); };
 
   const filteredTeachers = teachers.filter(t =>
     !teacherSearch.trim() || t.name.toLowerCase().includes(teacherSearch.toLowerCase()) || t.subject?.toLowerCase().includes(teacherSearch.toLowerCase())
@@ -108,7 +112,12 @@ export default function AdminStudentsPage() {
                   ) : filteredTeachers.map(t => (
                     <button
                       key={t.id}
-                      onClick={() => { setSelectedTeacher(t); setTeacherDropdown(false); reset(); }}
+                      onClick={() => {
+                        setSelectedTeacher(t);
+                        setTeacherDropdown(false);
+                        reset();
+                        adminGetTeacherClasses(t.id).then(setTeacherClasses).catch(() => setTeacherClasses([]));
+                      }}
                       className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${selectedTeacher?.id === t.id ? "bg-indigo-500/10" : "hover:bg-slate-800"}`}
                     >
                       <div>
@@ -207,6 +216,62 @@ export default function AdminStudentsPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                {/* Assign Classes */}
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Assign Classes <span className="text-slate-600">(optional)</span></p>
+                  {classIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {classIds.map(id => { const cls = teacherClasses.find(c => c.id === id); if (!cls) return null; return (
+                        <span key={id} className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-400">
+                          {cls.name}
+                          <button type="button" onClick={() => setClassIds(classIds.filter(cid => cid !== id))} className="hover:bg-indigo-500/20 rounded-full p-0.5"><X className="w-3 h-3" /></button>
+                        </span>
+                      ); })}
+                    </div>
+                  )}
+                  <div className="relative">
+                    <button type="button" onClick={() => { setClassDropdown(!classDropdown); setClassSearch(""); }}
+                      className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm hover:border-indigo-500 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-slate-500" />
+                        <span className={classIds.length ? "text-white" : "text-slate-500"}>{classIds.length ? `${classIds.length} class${classIds.length > 1 ? "es" : ""} selected` : "Select classes..."}</span>
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${classDropdown ? "rotate-180" : ""}`} />
+                    </button>
+                    {classDropdown && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setClassDropdown(false)} />
+                        <div className="absolute left-0 right-0 bottom-full mb-1.5 z-40 bg-slate-900 border border-slate-700 rounded-xl shadow-xl overflow-hidden">
+                          <div className="p-2 border-b border-slate-700">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                              <input value={classSearch} onChange={e => setClassSearch(e.target.value)} placeholder="Search classes..." autoFocus
+                                className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-white placeholder:text-slate-500 outline-none focus:border-indigo-500" />
+                            </div>
+                          </div>
+                          <div className="max-h-[180px] overflow-y-auto p-1.5">
+                            {teacherClasses.length === 0 ? (
+                              <p className="text-xs text-slate-500 text-center py-4">No classes for this teacher</p>
+                            ) : teacherClasses.filter(c => !classSearch.trim() || c.name.toLowerCase().includes(classSearch.toLowerCase())).map(c => {
+                              const selected = classIds.includes(c.id);
+                              return (
+                                <button key={c.id} type="button" onClick={() => setClassIds(selected ? classIds.filter(id => id !== c.id) : [...classIds, c.id])}
+                                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${selected ? "bg-indigo-500/10" : "hover:bg-slate-800"}`}>
+                                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${selected ? "bg-indigo-500 border-indigo-500" : "border-slate-600"}`}>
+                                    {selected && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                  </div>
+                                  <span className={`text-sm font-medium flex-1 ${selected ? "text-indigo-400" : "text-white"}`}>{c.name}</span>
+                                  {c.grade && <span className="text-[10px] font-semibold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-md">G{c.grade}</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="flex justify-end">

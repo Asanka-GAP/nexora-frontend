@@ -224,6 +224,32 @@ export interface BillingHistory {
   currentMonth: MonthlyBill;
 }
 
+export interface AdminBillingRow {
+  teacherId: string;
+  teacherName: string;
+  teacherEmail: string;
+  yearMonth: string;
+  monthDisplay: string;
+  softwareCost: number;
+  smsCost: number;
+  totalCost: number;
+  smsUnits: number;
+  messagesSent: number;
+  paymentStatus: string;
+  paidAt: string | null;
+}
+
+export interface AdminBillingSummary {
+  totalTeachers: number;
+  totalRevenue: number;
+  pendingRevenue: number;
+  overdueRevenue: number;
+  paidCount: number;
+  pendingCount: number;
+  overdueCount: number;
+  rows: AdminBillingRow[];
+}
+
 export interface SmsInfo {
   smsMessage: string;
   messageLength: number;
