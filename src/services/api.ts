@@ -75,6 +75,9 @@ export const addStudentContact = (studentId: string, data: { contactName: string
 export const deleteStudentContact = (studentId: string, contactId: string) =>
   api.delete<ApiResponse<void>>(`/students/${studentId}/contacts/${contactId}`);
 
+export const updateStudentContact = (studentId: string, contactId: string, data: { contactName: string; phone: string; relationship: string; isPrimary: boolean }) =>
+  api.put<ApiResponse<Student>>(`/students/${studentId}/contacts/${contactId}`, data).then((r) => r.data.data);
+
 export const bulkImportStudents = (data: { students: { fullName: string; currentGrade: number; address?: string; parentName?: string; parentPhone?: string; parentRelationship?: string; classIds?: string[] }[] }) =>
   api.post<ApiResponse<{ total: number; success: number; failed: number; errors: string[] }>>("/students/bulk-import", data).then((r) => r.data.data);
 

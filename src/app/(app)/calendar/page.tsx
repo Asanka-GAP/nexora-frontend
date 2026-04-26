@@ -2,14 +2,15 @@
 import { useState, useCallback, useMemo } from "react";
 import {
   ChevronLeft, ChevronRight, Clock, MapPin, CalendarDays,
-  BookOpen, GraduationCap, Sparkles, Calendar,
+  BookOpen, GraduationCap, Sparkles, Calendar, XCircle, RotateCcw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
-import { getSchedules } from "@/services/api";
+import { getSchedules, cancelSchedule, reactivateSchedule, getTeacherProfile } from "@/services/api";
 import type { Schedule } from "@/lib/types";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 import { useTheme } from "@/lib/theme";
+import { toast } from "sonner";
 
 type View = "week" | "month";
 
@@ -63,9 +64,42 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<Schedule | null>(null);
   const [selectedDate, setSelectedDate] = useState(toStr(new Date()));
+  const [actionNote, setActionNote] = useState("");
+  const [actioning, setActioning] = useState(false);
   const { theme } = useTheme();
   const dk = theme === "dark";
   const SS = STATUS_STYLES(dk);
+
+  const fetchProfile = useCallback(() => getTeacherProfile(), []);
+  const { data: profile } = useFetch(fetchProfile);
+  const smsEnabled = profile?.smsNotificationsEnabled ?? false;
+
+  const canReactivate = (s: Schedule) => {
+    if (s.status !== "CANCELLED") return false;
+    return new Date(s.sessionDate + "T" + s.endTime) > new Date();
+  };
+
+  const handleAction = async () => {
+    if (!selectedEvent) return;
+    if (smsEnabled && !actionNote.trim()) { toast.error("A note is required when SMS notifications are enabled"); return; }
+    setActioning(true);
+    try {
+      if (selectedEvent.status === "UPCOMING") {
+        await cancelSchedule(selectedEvent.id, actionNote || undefined);
+        toast.success("Session cancelled");
+      } else {
+        await reactivateSchedule(selectedEvent.id, actionNote || undefined);
+        toast.success("Session reactivated");
+      }
+      setSelectedEvent(null);
+      setActionNote("");
+      refetch();
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Failed");
+    } finally {
+      setActioning(false);
+    }
+  };
 
   const { from, to, weekDays, monthGrid } = useMemo(() => {
     if (view === "week") {
@@ -95,7 +129,7 @@ export default function CalendarPage() {
   }, [view, currentDate]);
 
   const fetchSchedules = useCallback(() => getSchedules({ from, to }), [from, to]);
-  const { data: schedules, loading } = useFetch(fetchSchedules);
+  const { data: schedules, loading, refetch } = useFetch(fetchSchedules);
 
   const eventsByDate = useMemo(() => {
     const map: Record<string, Schedule[]> = {};
@@ -566,7 +600,7 @@ export default function CalendarPage() {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <motion.div
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/40 backdrop-blur-md" onClick={() => setSelectedEvent(null)}
+                className="fixed inset-0 bg-black/40 backdrop-blur-md" onClick={() => { setSelectedEvent(null); setActionNote(""); }}
               />
               <motion.div
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -647,12 +681,50 @@ export default function CalendarPage() {
                     </span>
                   </div>
 
-                  <button
-                    onClick={() => setSelectedEvent(null)}
-                    className="w-full mt-4 py-3 rounded-xl text-sm font-bold text-text-muted bg-bg border border-border hover:bg-bg-card transition-all"
-                  >
-                    Close
-                  </button>
+                  {/* Action note + buttons */}
+                  {(selectedEvent.status === "UPCOMING" || canReactivate(selectedEvent)) && (
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-text-muted mb-1.5">
+                          Note {smsEnabled ? <span className="text-danger">*</span> : <span className="font-normal">(optional)</span>}
+                        </label>
+                        <textarea
+                          value={actionNote}
+                          onChange={e => setActionNote(e.target.value)}
+                          rows={2}
+                          placeholder="Add a note for parents..."
+                          className="w-full px-3 py-2.5 rounded-xl border border-border text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none bg-bg"
+                        />
+                        {smsEnabled && <p className="text-[10px] text-primary mt-1">SMS will be sent to enrolled students&apos; parents</p>}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setSelectedEvent(null); setActionNote(""); }}
+                          className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-text-muted hover:bg-bg transition-all"
+                        >Close</button>
+                        <button
+                          onClick={handleAction}
+                          disabled={actioning}
+                          className={`flex-1 h-10 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-1.5 ${
+                            selectedEvent.status === "UPCOMING" ? "bg-danger hover:bg-danger/90" : "bg-success hover:bg-success/90"
+                          }`}
+                        >
+                          {selectedEvent.status === "UPCOMING"
+                            ? <><XCircle className="w-4 h-4" />{actioning ? "Cancelling..." : "Cancel"}</>
+                            : <><RotateCcw className="w-4 h-4" />{actioning ? "Reactivating..." : "Reactivate"}</>}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(selectedEvent.status === "COMPLETED" || (selectedEvent.status === "CANCELLED" && !canReactivate(selectedEvent))) && (
+                    <button
+                      onClick={() => setSelectedEvent(null)}
+                      className="w-full mt-4 py-3 rounded-xl text-sm font-bold text-text-muted bg-bg border border-border hover:bg-bg-card transition-all"
+                    >
+                      Close
+                    </button>
+                  )}
                 </div>
               </motion.div>
             </div>

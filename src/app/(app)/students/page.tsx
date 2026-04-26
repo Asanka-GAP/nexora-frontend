@@ -12,7 +12,7 @@ import { renderCardHtml, renderCardPrintStyles, renderCardInnerHtml, resolveCont
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useFetch } from "@/hooks/useFetch";
-import { getStudents, getClasses, createStudent, updateStudent, deleteStudentApi, toggleStudentStatus, addStudentContact, deleteStudentContact, bulkImportStudents, bulkAssignClasses } from "@/services/api";
+import { getStudents, getClasses, createStudent, updateStudent, deleteStudentApi, toggleStudentStatus, addStudentContact, deleteStudentContact, updateStudentContact, bulkImportStudents, bulkAssignClasses } from "@/services/api";
 import type { Student, ClassItem } from "@/lib/types";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 import AttendanceDrawer from "@/components/students/AttendanceDrawer";
@@ -53,6 +53,9 @@ export default function StudentsPage() {
   const [contactStudent, setContactStudent] = useState<Student | null>(null);
   const [newContact, setNewContact] = useState<ParentRow>({ ...emptyParent });
   const [addingContact, setAddingContact] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [editingContactData, setEditingContactData] = useState<ParentRow>({ ...emptyParent });
+  const [savingContact, setSavingContact] = useState(false);
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
@@ -197,6 +200,11 @@ ${cardHtml(qrStudent, qrDataUrl)}
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.fullName) { toast.error("Student name is required"); return; }
+    if (!editingStudent) {
+      const missingPhone = parents.some(p => p.contactName && !p.phone);
+      const hasValidParent = parents.some(p => p.contactName && p.phone);
+      if (missingPhone || !hasValidParent) { toast.error("Parent phone number is required"); return; }
+    }
     setSaving(true);
     try {
       if (editingStudent) {
@@ -247,6 +255,20 @@ ${cardHtml(qrStudent, qrDataUrl)}
       refetch();
     } catch { toast.error("Failed to add contact"); }
     finally { setAddingContact(false); }
+  };
+
+  const handleUpdateContact = async () => {
+    if (!contactStudent || !editingContactId) return;
+    if (!editingContactData.contactName || !editingContactData.phone) { toast.error("Name and phone required"); return; }
+    setSavingContact(true);
+    try {
+      const updated = await updateStudentContact(contactStudent.id, editingContactId, editingContactData);
+      toast.success("Contact updated");
+      setContactStudent(updated);
+      setEditingContactId(null);
+      refetch();
+    } catch { toast.error("Failed to update contact"); }
+    finally { setSavingContact(false); }
   };
 
   const handleDeleteContact = async (contactId: string) => {
@@ -692,9 +714,9 @@ ${cardHtml(qrStudent, qrDataUrl)}
                             className="w-full px-3 py-2 rounded-lg border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-text-muted mb-1">Phone</label>
+                          <label className="block text-xs font-semibold text-text-muted mb-1">Phone <span className="text-danger">*</span></label>
                           <input value={p.phone} onChange={e => updateParentRow(idx, "phone", e.target.value)} placeholder="+94 77 123 4567"
-                            className="w-full px-3 py-2 rounded-lg border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                            className={`w-full px-3 py-2 rounded-lg border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ${p.contactName && !p.phone ? "border-danger/60 focus:ring-danger/20 focus:border-danger" : "border-border"}`} />
                         </div>
                       </div>
                       <div className="space-y-3">
@@ -733,7 +755,7 @@ ${cardHtml(qrStudent, qrDataUrl)}
       </Modal>
 
       {/* Contact Management Modal */}
-      <Modal open={!!contactStudent} onClose={() => setContactStudent(null)} title="" className="max-w-lg p-0">
+      <Modal open={!!contactStudent} onClose={() => { setContactStudent(null); setEditingContactId(null); }} title="" className="max-w-lg p-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-5 rounded-t-2xl">
           <div className="flex items-center gap-3">
@@ -754,22 +776,66 @@ ${cardHtml(qrStudent, qrDataUrl)}
             {contactStudent?.contacts?.length ? (
               <div className="space-y-2">
                 {contactStudent.contacts.map((c, i) => (
-                  <div key={c.id} className="flex items-center gap-3 rounded-xl border border-border bg-bg-card px-4 py-3 group hover:border-primary/20 transition-all">
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-bold text-primary">{i + 1}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-text truncate">{c.contactName}</p>
-                        {c.isPrimary && <span className="text-[9px] font-bold text-white bg-primary px-1.5 py-0.5 rounded-md">PRIMARY</span>}
+                  <div key={c.id} className="rounded-xl border border-border bg-bg-card transition-all">
+                    {editingContactId === c.id ? (
+                      <div className="p-3.5 space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-text-muted mb-1">Name</label>
+                            <input value={editingContactData.contactName} onChange={e => setEditingContactData({ ...editingContactData, contactName: e.target.value })} placeholder="Jane Doe"
+                              className="w-full px-3 py-2 rounded-lg border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-text-muted mb-1">Phone <span className="text-danger">*</span></label>
+                            <input value={editingContactData.phone} onChange={e => setEditingContactData({ ...editingContactData, phone: e.target.value })} placeholder="+94 77 123 4567"
+                              className="w-full px-3 py-2 rounded-lg border border-border bg-bg-card text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Relationship</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {["Parent", "Father", "Mother", "Guardian", "Other"].map(r => (
+                              <button key={r} type="button" onClick={() => setEditingContactData({ ...editingContactData, relationship: r })}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${editingContactData.relationship === r ? "bg-primary text-white shadow-sm" : "bg-bg text-text-muted hover:text-text hover:bg-bg-card border border-border"}`}>
+                                {r}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => setEditingContactData({ ...editingContactData, isPrimary: !editingContactData.isPrimary })}
+                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all w-full ${editingContactData.isPrimary ? "bg-primary/10 border border-primary/30" : "bg-bg border border-border hover:border-primary/20"}`}>
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${editingContactData.isPrimary ? "bg-primary border-primary" : "border-border bg-bg-card"}`}>
+                            {editingContactData.isPrimary && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                          </div>
+                          <span className={`text-xs font-semibold ${editingContactData.isPrimary ? "text-primary" : "text-text-muted"}`}>Primary Contact</span>
+                        </button>
+                        <div className="flex gap-2 pt-1">
+                          <button type="button" onClick={() => setEditingContactId(null)} className="flex-1 h-8 rounded-lg border border-border text-xs font-semibold text-text-muted hover:bg-bg transition-all">Cancel</button>
+                          <Button size="sm" className="flex-1" loading={savingContact} onClick={handleUpdateContact}>Save</Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-text-muted">{c.phone}</span>
-                        <span className="text-text-muted/30">·</span>
-                        <span className="text-xs text-text-muted">{c.relationship}</span>
+                    ) : (
+                      <div className="flex items-center gap-3 px-4 py-3 group hover:border-primary/20">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-bold text-primary">{i + 1}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-text truncate">{c.contactName}</p>
+                            {c.isPrimary && <span className="text-[9px] font-bold text-white bg-primary px-1.5 py-0.5 rounded-md">PRIMARY</span>}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-text-muted">{c.phone}</span>
+                            <span className="text-text-muted/30">·</span>
+                            <span className="text-xs text-text-muted">{c.relationship}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
+                          <button onClick={() => { setEditingContactId(c.id); setEditingContactData({ contactName: c.contactName, phone: c.phone, relationship: c.relationship, isPrimary: c.isPrimary }); }} className="p-2 rounded-lg text-text-muted/40 hover:text-primary hover:bg-primary/10 transition-all"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => handleDeleteContact(c.id)} className="p-2 rounded-lg text-text-muted/40 hover:text-danger hover:bg-danger/10 transition-all"><Trash2 className="w-4 h-4" /></button>
+                        </div>
                       </div>
-                    </div>
-                    <button onClick={() => handleDeleteContact(c.id)} className="p-2 rounded-lg text-text-muted/40 hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -831,7 +897,7 @@ ${cardHtml(qrStudent, qrDataUrl)}
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-bg/40">
-          <Button variant="ghost" onClick={() => setContactStudent(null)}>Close</Button>
+          <Button variant="ghost" onClick={() => { setContactStudent(null); setEditingContactId(null); }}>Close</Button>
           <Button onClick={handleAddContact} loading={addingContact}><UserPlus className="h-4 w-4" /> Add Contact</Button>
         </div>
       </Modal>

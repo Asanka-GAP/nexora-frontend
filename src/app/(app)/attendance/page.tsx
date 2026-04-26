@@ -59,7 +59,7 @@ export default function AttendancePage() {
       const q = search.toLowerCase();
       const matchesSearch = r.studentName.toLowerCase().includes(q) || 
                            r.studentCode.toLowerCase().includes(q) || 
-                           r.className.toLowerCase().includes(q);
+                           (r.className ?? "").toLowerCase().includes(q);
       if (!matchesSearch) return false;
     }
     
@@ -325,7 +325,7 @@ export default function AttendancePage() {
                   <tr key={r.id} className="border-b border-border/50 hover:bg-bg/50 transition-colors">
                     <td className="px-5 py-3.5 text-sm font-medium text-text">{r.studentName}</td>
                     <td className="px-5 py-3.5 text-sm text-text-muted font-mono">{r.studentCode}</td>
-                    <td className="px-5 py-3.5"><span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-secondary/15 text-cyan-800">{r.className}</span></td>
+                    <td className="px-5 py-3.5"><span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${r.className ? "bg-secondary/15 text-cyan-800" : "bg-red-100 text-red-600"}`}>{r.className ?? "Deleted Class"}</span></td>
                     <td className="px-5 py-3.5 text-sm text-text-muted">{new Date(r.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</td>
                     <td className="px-5 py-3.5 text-sm text-text-muted">{r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
                     <td className="px-5 py-3.5"><span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${r.status === "ABSENT" ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>{r.status}</span></td>
@@ -347,7 +347,7 @@ export default function AttendancePage() {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${r.status === "ABSENT" ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>{r.status}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Class</p><p className="text-xs font-medium text-text mt-0.5 truncate">{r.className}</p></div>
+                      <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Class</p><p className={`text-xs font-medium mt-0.5 truncate ${r.className ? "text-text" : "text-red-500"}`}>{r.className ?? "Deleted Class"}</p></div>
                       <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Date</p><p className="text-xs font-medium text-text mt-0.5">{new Date(r.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p></div>
                       <div className="bg-bg rounded-lg px-2.5 py-2"><p className="text-[9px] font-semibold text-text-muted uppercase">Time</p><p className="text-xs font-medium text-text mt-0.5">{r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}</p></div>
                     </div>

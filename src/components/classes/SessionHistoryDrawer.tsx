@@ -1,10 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Calendar, CalendarDays, ChevronDown } from "lucide-react";
-import { getClassSessions } from "@/services/api";
+import { X, Calendar, CalendarDays, ChevronDown, Ban, RotateCcw } from "lucide-react";
+import { getClassSessions, cancelSchedule, reactivateSchedule } from "@/services/api";
 import type { ClassItem, Schedule } from "@/lib/types";
 import DatePicker from "@/components/shared/DatePicker";
+import { toast } from "sonner";
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
   COMPLETED: { bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500" },
@@ -37,6 +38,9 @@ export default function SessionHistoryDrawer({ classItem, onClose }: Props) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
+  const [actionSession, setActionSession] = useState<Schedule | null>(null);
+  const [actionNote, setActionNote] = useState("");
+  const [actioning, setActioning] = useState(false);
 
   const fetchSessions = useCallback(async () => {
     if (!classItem) return;
@@ -60,6 +64,33 @@ export default function SessionHistoryDrawer({ classItem, onClose }: Props) {
 
   const applyPreset = (p: typeof PRESETS[0]) => {
     setActivePreset(p.label); setDateFrom(p.from()); setDateTo(p.to()); setDateOpen(false);
+  };
+
+  const isSessionPast = (s: Schedule) => {
+    const now = new Date();
+    const sessionEnd = new Date(`${s.sessionDate}T${s.endTime}`);
+    return sessionEnd < now;
+  };
+
+  const handleAction = async () => {
+    if (!actionSession) return;
+    setActioning(true);
+    try {
+      if (actionSession.status === "UPCOMING") {
+        await cancelSchedule(actionSession.id, actionNote || undefined);
+        toast.success("Session cancelled");
+      } else {
+        await reactivateSchedule(actionSession.id, actionNote || undefined);
+        toast.success("Session reactivated");
+      }
+      setActionSession(null);
+      setActionNote("");
+      fetchSessions();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || (actionSession.status === "UPCOMING" ? "Failed to cancel session" : "Failed to reactivate session"));
+    } finally {
+      setActioning(false);
+    }
   };
 
   const completed = sessions.filter(s => s.status === "COMPLETED").length;
@@ -214,6 +245,8 @@ export default function SessionHistoryDrawer({ classItem, onClose }: Props) {
                     {sessions.map((s) => {
                       const style = STATUS_STYLES[s.status] || { bg: "bg-slate-100", text: "text-slate-600", dot: "bg-slate-400" };
                       const dayName = new Date(s.sessionDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" });
+                      const canCancel = s.status === "UPCOMING";
+                      const canReactivate = s.status === "CANCELLED" && !isSessionPast(s);
                       return (
                         <div key={s.id} className="relative pl-7">
                           <div className={`absolute left-0 top-1.5 w-3 h-3 rounded-full border-2 border-white shadow-sm ${style.dot}`} />
@@ -226,9 +259,27 @@ export default function SessionHistoryDrawer({ classItem, onClose }: Props) {
                                 {dayName}, {new Date(s.sessionDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                               </span>
                             </div>
-                            <p className="text-sm font-bold text-slate-700">
-                              {s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}
-                            </p>
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-bold text-slate-700">
+                                {s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}
+                              </p>
+                              {canCancel && (
+                                <button
+                                  onClick={() => { setActionSession(s); setActionNote(""); }}
+                                  title="Cancel session"
+                                  className="w-7 h-7 rounded-full flex items-center justify-center bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-150">
+                                  <Ban className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {canReactivate && (
+                                <button
+                                  onClick={() => { setActionSession(s); setActionNote(""); }}
+                                  title="Reactivate session"
+                                  className="w-7 h-7 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all duration-150">
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                             {s.location && (
                               <p className="text-[10px] text-slate-400 mt-1">{s.location}</p>
                             )}
@@ -241,6 +292,47 @@ export default function SessionHistoryDrawer({ classItem, onClose }: Props) {
               )}
             </div>
           </motion.div>
+
+          {/* Cancel / Reactivate confirmation */}
+          <AnimatePresence>
+            {actionSession && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setActionSession(null)} />
+                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                  className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-100">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
+                    actionSession.status === "UPCOMING" ? "bg-red-50" : "bg-emerald-50"
+                  }`}>
+                    {actionSession.status === "UPCOMING"
+                      ? <Ban className="w-6 h-6 text-red-500" />
+                      : <RotateCcw className="w-6 h-6 text-emerald-500" />}
+                  </div>
+                  <h3 className="text-base font-semibold text-slate-800 text-center">
+                    {actionSession.status === "UPCOMING" ? "Cancel Session" : "Reactivate Session"}
+                  </h3>
+                  <p className="text-xs text-slate-500 text-center mt-1 mb-4">
+                    {new Date(actionSession.sessionDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                    {" · "}{actionSession.startTime.slice(0, 5)} – {actionSession.endTime.slice(0, 5)}
+                  </p>
+                  <div className="mb-4">
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Note <span className="text-slate-400 font-normal">(optional)</span></label>
+                    <textarea value={actionNote} onChange={e => setActionNote(e.target.value)} rows={2} placeholder="Add a note for parents..."
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none" />
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setActionSession(null)} className="flex-1 h-10 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all">Cancel</button>
+                    <button onClick={handleAction} disabled={actioning}
+                      className={`flex-1 h-10 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 ${
+                        actionSession.status === "UPCOMING" ? "bg-red-500 hover:bg-red-600" : "bg-emerald-500 hover:bg-emerald-600"
+                      }`}>
+                      {actioning ? "..." : actionSession.status === "UPCOMING" ? "Confirm Cancel" : "Confirm Reactivate"}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       )}
     </AnimatePresence>
