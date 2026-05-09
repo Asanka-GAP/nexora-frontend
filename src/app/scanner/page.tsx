@@ -14,6 +14,24 @@ const DUPLICATE_COOLDOWN = 4000;
 interface ScanRecord { name: string; code: string; time: string; success: boolean; message?: string; }
 interface ScanFeedback { type: "success" | "error"; name: string; message: string; }
 
+function findActiveClass(classes: ClassItem[]): ClassItem | null {
+  const now = new Date();
+  const currentDay = now.getDay(); // 0=Sun, 6=Sat
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const toMinutes = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  return classes.find(cls =>
+    cls.schedules?.some(s => {
+      if (s.scheduleType === "WEEKLY" && s.dayOfWeek !== currentDay) return false;
+      if (s.scheduleType === "ONETIME") {
+        if (!s.sessionDate) return false;
+        const d = new Date(s.sessionDate);
+        if (d.getFullYear() !== now.getFullYear() || d.getMonth() !== now.getMonth() || d.getDate() !== now.getDate()) return false;
+      }
+      return currentMinutes >= toMinutes(s.startTime) && currentMinutes <= toMinutes(s.endTime);
+    })
+  ) ?? null;
+}
+
 function playBeep() { try { const c = new AudioContext(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = 1200; g.gain.value = 0.3; o.start(); o.stop(c.currentTime + 0.15); } catch {} }
 function playError() { try { const c = new AudioContext(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = 400; g.gain.value = 0.3; o.start(); o.stop(c.currentTime + 0.3); } catch {} }
 
@@ -34,8 +52,9 @@ export default function ScannerPage() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClass, setSelectedClass] = useState("");
+  const [autoSelected, setAutoSelected] = useState(false);
   const selectedClassRef = useRef("");
-  const updateSelectedClass = (id: string) => { setSelectedClass(id); selectedClassRef.current = id; };
+  const updateSelectedClass = (id: string, auto = false) => { setSelectedClass(id); selectedClassRef.current = id; setAutoSelected(auto); };
   const [classSearch, setClassSearch] = useState("");
   const [classOpen, setClassOpen] = useState(false);
   const [recentScans, setRecentScans] = useState<ScanRecord[]>([]);
@@ -93,7 +112,18 @@ export default function ScannerPage() {
     return c.name.toLowerCase().includes(q) || (c.subject?.toLowerCase().includes(q));
   });
 
-  useEffect(() => { getClasses().then(c => { setClasses(c); if (c.length) { setSelectedClass(c[0].id); selectedClassRef.current = c[0].id; } }).catch(() => {}); }, []);
+  useEffect(() => {
+    getClasses().then(c => {
+      setClasses(c);
+      if (!c.length) return;
+      const active = findActiveClass(c);
+      if (active) {
+        updateSelectedClass(active.id, true);
+      } else {
+        updateSelectedClass(c[0].id, false);
+      }
+    }).catch(() => {});
+  }, []);
 
   const onQrDetected = useCallback((decodedText: string) => {
     const now = Date.now();
@@ -239,7 +269,10 @@ export default function ScannerPage() {
               className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${selectedClass ? "border-primary/30 bg-primary/5 text-primary shadow-sm" : "border-border text-text-muted hover:bg-bg"}`}>
               <div className="flex items-center gap-2.5">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`w-4 h-4 ${selectedClass ? "text-primary" : "text-text-muted"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
-                <span>{classes.find(c => c.id === selectedClass)?.name ?? "Select a class"}</span>
+                <div className="flex items-center gap-2">
+                  <span>{classes.find(c => c.id === selectedClass)?.name ?? "Select a class"}</span>
+                  {autoSelected && <span className="text-[9px] font-bold bg-emerald-500/15 text-emerald-600 px-1.5 py-0.5 rounded-full">Now</span>}
+                </div>
               </div>
               <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${classOpen ? "rotate-180" : ""}`} />
             </button>
@@ -251,7 +284,7 @@ export default function ScannerPage() {
                   <div className="p-2 border-b border-border"><div className="relative"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg><input value={classSearch} onChange={e => setClassSearch(e.target.value)} placeholder="Search classes..." autoFocus className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-bg text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20" /></div></div>
                   <div className="p-2 max-h-[200px] overflow-y-auto">
                     {filteredClasses.length === 0 ? <p className="text-sm text-text-muted text-center py-4">No classes found</p> :
-                      filteredClasses.map(c => (<button key={c.id} onClick={() => { updateSelectedClass(c.id); setClassOpen(false); setClassSearch(""); }}
+                      filteredClasses.map(c => (<button key={c.id} onClick={() => { updateSelectedClass(c.id, false); setClassOpen(false); setClassSearch(""); }}
                         className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-all ${selectedClass === c.id ? "text-white bg-primary shadow-sm" : "text-text hover:bg-bg"}`}>
                         <span className="block truncate">{c.name}</span><span className={`text-[10px] ${selectedClass === c.id ? "text-white/70" : "text-text-muted"}`}>{c.subject} · Grade {c.grade}</span>
                       </button>))}
