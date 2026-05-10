@@ -60,6 +60,7 @@ export interface ClassItem {
   studentCount: number;
   completedSessions: number;
   cancelledSessions: number;
+  isActive: boolean;
 }
 
 export interface ClassScheduleItem {

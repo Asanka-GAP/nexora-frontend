@@ -54,6 +54,7 @@ export default function SettingsPage() {
   const fetchAcademicConfig = useCallback(() => getAcademicYearConfig(), []);
   const { data: academicConfig, loading: academicLoading, refetch: refetchAcademic } = useFetch(fetchAcademicConfig);
   const [nextUpgradeDate, setNextUpgradeDate] = useState("");
+  const [maxGrade, setMaxGrade] = useState(13);
   const [academicSaving, setAcademicSaving] = useState(false);
   const [academicMsg, setAcademicMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -78,7 +79,7 @@ export default function SettingsPage() {
   const smsDirty = profile ? smsNotificationsEnabled !== (profile.smsNotificationsEnabled ?? true) : false;
   const smsTemplateDirty = smsTemplate !== savedSmsTemplate;
   const absentTemplateDirty = absentTemplate !== savedAbsentTemplate;
-  const academicDirty = academicConfig ? nextUpgradeDate !== (academicConfig.nextUpgradeDate ?? "") : false;
+  const academicDirty = academicConfig ? (nextUpgradeDate !== (academicConfig.nextUpgradeDate ?? "") || maxGrade !== (academicConfig.maxGrade ?? 13)) : false;
   const anyDirty = profileDirty || passwordDirty || smsDirty || smsTemplateDirty || absentTemplateDirty || academicDirty;
 
   const currentTabDirty = tab === "profile" ? profileDirty
@@ -97,7 +98,7 @@ export default function SettingsPage() {
   const discardChanges = () => {
     if (profile) { setName(profile.name ?? ""); setPhone(profile.phone ?? ""); setSubject(profile.subject ?? ""); setEmail(profile.email ?? ""); setSmsNotificationsEnabled(profile.smsNotificationsEnabled ?? true); }
     setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
-    if (academicConfig) setNextUpgradeDate(academicConfig.nextUpgradeDate ?? "");
+    if (academicConfig) { setNextUpgradeDate(academicConfig.nextUpgradeDate ?? ""); setMaxGrade(academicConfig.maxGrade ?? 13); }
     if (savedSmsTemplate) setSmsTemplate(savedSmsTemplate);
     if (savedAbsentTemplate) setAbsentTemplate(savedAbsentTemplate);
     setProfileMsg(null); setPwMsg(null); setSmsMsg(null); setAcademicMsg(null);
@@ -132,6 +133,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (academicConfig) {
       setNextUpgradeDate(academicConfig.nextUpgradeDate ?? "");
+      setMaxGrade(academicConfig.maxGrade ?? 13);
     }
   }, [academicConfig]);
 
@@ -258,8 +260,8 @@ export default function SettingsPage() {
     setAcademicSaving(true);
     setAcademicMsg(null);
     try {
-      await updateAcademicYearConfig({ nextUpgradeDate });
-      setAcademicMsg({ type: "success", text: "Next grade upgrade date updated" });
+      await updateAcademicYearConfig({ nextUpgradeDate, maxGrade });
+      setAcademicMsg({ type: "success", text: "Academic year configuration updated" });
       refetchAcademic();
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -378,6 +380,9 @@ export default function SettingsPage() {
               <p className={`text-[10px] font-bold uppercase tracking-widest ${dk ? "text-amber-400/70" : "text-amber-600/70"}`}>Next Grade Upgrade</p>
               <p className={`text-sm font-bold mt-0.5 ${dk ? "text-amber-100" : "text-text"}`}>
                 {new Date(academicConfig.nextUpgradeDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "long", day: "numeric" })}
+              </p>
+              <p className={`text-[10px] mt-0.5 ${dk ? "text-amber-400/60" : "text-amber-600/60"}`}>
+                Max grade: <span className="font-bold">{academicConfig.maxGrade ?? 13}</span>
               </p>
             </div>
             <div className="flex-shrink-0 relative">
@@ -1010,6 +1015,32 @@ export default function SettingsPage() {
                   minDate={new Date().toISOString().split("T")[0]}
                   fullWidth
                 />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-text-muted mb-1.5 block">Highest Grade</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from({ length: 13 }, (_, i) => i + 1).map(g => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setMaxGrade(g)}
+                      className={`w-9 h-9 rounded-lg text-xs font-bold transition-all ${
+                        maxGrade === g
+                          ? "bg-primary text-white shadow-sm shadow-primary/30"
+                          : g <= maxGrade
+                          ? dk ? "bg-primary/20 text-primary" : "bg-primary/10 text-primary"
+                          : dk ? "bg-bg text-text-muted border border-border" : "bg-bg text-text-muted border border-border"
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-text-muted mt-2">
+                  Students and classes at grade <span className="font-semibold text-text">{maxGrade}</span> will not be upgraded further.
+                  {maxGrade === 11 && " (O/L)"}{maxGrade === 13 && " (A/L)"}
+                </p>
               </div>
 
               {academicMsg && (

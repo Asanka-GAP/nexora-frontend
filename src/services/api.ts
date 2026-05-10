@@ -97,6 +97,9 @@ export const updateClass = (id: string, data: { name: string; grade: number; loc
 export const deleteClassApi = (id: string) =>
   api.delete<ApiResponse<void>>(`/classes/${id}`);
 
+export const toggleClassStatus = (id: string) =>
+  api.patch<ApiResponse<void>>(`/classes/${id}/status`);
+
 export const cancelClass = (id: string, reason?: string) =>
   api.post(`/classes/${id}/cancel`, reason ? { reason } : {});
 
@@ -220,10 +223,10 @@ export const saveIdCardDesign = (design: string) =>
 
 // Academic Year Config
 export const getAcademicYearConfig = () =>
-  api.get<ApiResponse<{ nextUpgradeDate: string; lastUpgradedAt: string | null }>>("/settings/academic-year").then((r) => r.data.data);
+  api.get<ApiResponse<{ nextUpgradeDate: string; lastUpgradedAt: string | null; maxGrade: number }>>("/settings/academic-year").then((r) => r.data.data);
 
-export const updateAcademicYearConfig = (data: { nextUpgradeDate: string }) =>
-  api.put<ApiResponse<{ nextUpgradeDate: string; lastUpgradedAt: string | null }>>("/settings/academic-year", data).then((r) => r.data.data);
+export const updateAcademicYearConfig = (data: { nextUpgradeDate: string; maxGrade?: number }) =>
+  api.put<ApiResponse<{ nextUpgradeDate: string; lastUpgradedAt: string | null; maxGrade: number }>>("/settings/academic-year", data).then((r) => r.data.data);
 
 // SMS Template
 export interface SmsTemplateData { template: string; preview: string; characterCount: number; units: number; cost: number; }
