@@ -61,7 +61,7 @@ function PasswordFields({ pw, onChange }: { pw: { newPassword: string; confirmPa
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, resetPassword, verifyOtpByUsername, forgotPassword, forgotPasswordReset, resendOtp } = useAuth();
+  const { login, instituteLogin, resetPassword, instituteResetPassword, verifyOtpByUsername, forgotPassword, forgotPasswordReset, resendOtp } = useAuth();
   const [step, setStep] = useState<Step>("login");
   const [flow, setFlow] = useState<Flow>("firstLogin");
   const [form, setForm] = useState({ username: "", password: "" });
@@ -78,16 +78,30 @@ export default function LoginPage() {
   const resetOtp = () => setOtp(["", "", "", "", "", ""]);
   const otpValue = otp.join("");
 
+  const getRedirect = (role: string) => {
+    if (role === "SUPER_ADMIN") return "/super-admin";
+    if (role === "INSTITUTE_ADMIN") return "/institute";
+    if (role === "INSTITUTE_TEACHER") return "/institute/teacher";
+    return "/dashboard";
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); clearError();
     try {
-      const result = await login(form.username, form.password);
+      // Try teacher/super-admin login first
+      let result;
+      try {
+        result = await login(form.username, form.password);
+      } catch {
+        // If teacher login fails, try institute login
+        result = await instituteLogin(form.username, form.password);
+      }
       if (result.firstLogin) {
         setCredentials({ username: form.username }); setMaskedEmail(result.email || ""); setFlow("firstLogin"); setStep("otp");
       } else {
-        router.push(result.user.role === "SUPER_ADMIN" ? "/super-admin" : "/dashboard");
+        router.push(getRedirect(result.user.role));
       }
-    } catch (err: unknown) { setError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || (err as Error)?.message || "Login failed"); }
+    } catch (err: unknown) { setError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || (err as Error)?.message || "Invalid username or password"); }
     finally { setLoading(false); }
   };
 
@@ -119,9 +133,17 @@ export default function LoginPage() {
     setLoading(true); clearError();
     try {
       if (flow === "firstLogin") {
-        await resetPassword(credentials.username, otpValue, pwForm.newPassword);
-        const result = await login(credentials.username, pwForm.newPassword);
-        router.push(result.user.role === "SUPER_ADMIN" ? "/super-admin" : "/dashboard");
+        // Try teacher reset first, then institute reset
+        try {
+          await resetPassword(credentials.username, otpValue, pwForm.newPassword);
+        } catch {
+          await instituteResetPassword(credentials.username, otpValue, pwForm.newPassword);
+        }
+        // Re-login to get the token and role
+        let result;
+        try { result = await login(credentials.username, pwForm.newPassword); }
+        catch { result = await instituteLogin(credentials.username, pwForm.newPassword); }
+        router.push(getRedirect(result.user.role));
       } else {
         await forgotPasswordReset(forgotEmail, otpValue, pwForm.newPassword);
         setStep("login"); setForm({ username: "", password: "" }); setPwForm({ newPassword: "", confirmPassword: "" }); resetOtp();

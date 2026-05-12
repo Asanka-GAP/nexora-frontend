@@ -251,6 +251,197 @@ export interface AdminBillingSummary {
   rows: AdminBillingRow[];
 }
 
+// ── Institute Module Types ────────────────────────────────────────────────
+
+export interface InstituteLoginResponse {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  token: string;
+  firstLogin: boolean;
+}
+
+export interface InstituteTeacherLoginResponse {
+  id: string;
+  instituteId: string;
+  username: string;
+  name: string;
+  subject?: string;
+  role: string;
+  token: string;
+  firstLogin: boolean;
+  email: string | null;
+}
+
+export interface InstituteResponse {
+  id: string;
+  name: string;
+  address?: string;
+  phone?: string;
+  email: string;
+  logoUrl?: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface ClassroomResponse {
+  id: string;
+  instituteId: string;
+  name: string;
+  capacity?: number;
+  location?: string;
+  isActive: boolean;
+}
+
+export interface InstituteTeacherResponse {
+  id: string;
+  instituteId: string;
+  username: string;
+  name: string;
+  email: string;
+  phone: string;
+  subject: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface InstituteStudentContact {
+  id: string;
+  contactName: string;
+  phone: string;
+  relationship: string;
+  isPrimary: boolean;
+}
+
+export interface InstituteEnrolledClass {
+  id: string;
+  name: string;
+  grade: number;
+  subject: string;
+}
+
+export interface InstituteStudentResponse {
+  id: string;
+  studentCode: string;
+  fullName: string;
+  currentGrade: number;
+  address?: string;
+  isActive: boolean;
+  createdAt: string;
+  contacts: InstituteStudentContact[];
+  enrolledClasses: InstituteEnrolledClass[];
+  attendanceCount: number;
+  presentCount: number;
+}
+
+export interface InstituteClassSchedule {
+  id: string;
+  scheduleType: string;
+  dayOfWeek?: number;
+  sessionDate?: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface InstituteClassResponse {
+  id: string;
+  instituteId: string;
+  name: string;
+  grade: number;
+  subject?: string;
+  instituteTeacherId?: string;
+  teacherName?: string;
+  classroomId?: string;
+  classroomName?: string;
+  isActive: boolean;
+  createdAt: string;
+  schedules: InstituteClassSchedule[];
+  studentCount: number;
+  completedSessions: number;
+  cancelledSessions: number;
+}
+
+export interface InstituteAttendanceRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentCode: string;
+  classId: string;
+  className: string;
+  date: string;
+  checkInTime: string;
+  status: string;
+}
+
+export interface InstituteSessionResponse {
+  id: string;
+  classId: string;
+  className: string;
+  grade: number;
+  classroomName?: string;
+  sessionDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+}
+
+export interface ClassFeeResponse {
+  id: string;
+  classId: string;
+  amount: number;
+  feeLabel?: string;
+}
+
+export interface FeePaymentResponse {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentCode: string;
+  classId: string;
+  className: string;
+  yearMonth: string;
+  amount: number;
+  status: string;
+  paidAt?: string;
+  note?: string;
+}
+
+export interface InstituteDashboard {
+  totalTeachers: number;
+  totalStudents: number;
+  totalClasses: number;
+  todayAttendance: number;
+  pendingFees: number;
+  paidFees: number;
+}
+
+export interface InstituteDashboardCharts {
+  attendanceTrend: { date: string; present: number; absent: number }[];
+  attendancePerTeacher: { name: string; count: number }[];
+  studentsPerTeacher: { name: string; students: number }[];
+  feeCollection: { paid: number; pending: number };
+  gradeDistribution: { grade: string; gradeNum: number; count: number }[];
+  monthlyFeeCollection: { month: string; paid: number; pending: number }[];
+}
+
+export interface InstituteTeacherDashboard {
+  totalStudents: number;
+  totalClasses: number;
+  todayAttendance: number;
+}
+
+export interface InstituteMarkAttendanceResponse {
+  attendanceId: string;
+  studentId: string;
+  studentName: string;
+  classId: string;
+  date: string;
+  checkInTime: string;
+  status: string;
+  message: string;
+}
+
 export interface SmsInfo {
   smsMessage: string;
   messageLength: number;

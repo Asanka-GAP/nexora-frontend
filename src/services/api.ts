@@ -4,6 +4,12 @@ import type {
   ClassCreateRequest, MarkAttendanceRequest, MarkAttendanceResponse, Schedule,
   AttendanceRecord, LoginResponse, AdminDashboard, TeacherItem, TeacherProfile,
   CurrentMonthUsage, BillingHistory, AdminBillingSummary,
+  InstituteLoginResponse, InstituteTeacherLoginResponse, InstituteResponse,
+  ClassroomResponse, InstituteTeacherResponse, InstituteStudentResponse,
+  InstituteClassResponse, InstituteAttendanceRecord, InstituteSessionResponse,
+  ClassFeeResponse, FeePaymentResponse, InstituteDashboard, InstituteTeacherDashboard,
+  InstituteMarkAttendanceResponse,
+  InstituteDashboardCharts,
 } from "@/lib/types";
 
 const api = axios.create({
@@ -274,5 +280,203 @@ export const exportBillingReport = (month?: string) =>
     link.click();
     window.URL.revokeObjectURL(url);
   });
+
+// ── Institute Auth ────────────────────────────────────────────────────────────
+export const instituteLoginApi = (username: string, password: string) =>
+  api.post<ApiResponse<InstituteLoginResponse | InstituteTeacherLoginResponse>>("/auth/institute/login", { username, password });
+
+export const instituteResetPasswordApi = (username: string, otp: string, newPassword: string) =>
+  api.post<ApiResponse<void>>("/auth/institute/reset-password", { username, otp, newPassword });
+
+// ── Super Admin: Institute Management ────────────────────────────────────────
+export const getInstitutes = () =>
+  api.get<ApiResponse<InstituteResponse[]>>("/admin/institutes").then(r => r.data.data);
+
+export const createInstitute = (data: { name: string; address?: string; phone?: string; email: string; password: string }) =>
+  api.post<ApiResponse<InstituteResponse>>("/admin/institutes", data).then(r => r.data.data);
+
+export const toggleInstituteStatus = (id: string) =>
+  api.patch<ApiResponse<void>>(`/admin/institutes/${id}/status`);
+
+export const deleteInstitute = (id: string) =>
+  api.delete<ApiResponse<void>>(`/admin/institutes/${id}`);
+
+// ── Institute Admin: Dashboard ────────────────────────────────────────────────
+export const getInstituteDashboard = () =>
+  api.get<ApiResponse<InstituteDashboard>>("/institute/admin/dashboard").then(r => r.data.data);
+
+export const getInstituteDashboardCharts = (params?: { from?: string; to?: string }) => {
+  const clean: Record<string, string> = {};
+  if (params?.from) clean.from = params.from;
+  if (params?.to) clean.to = params.to;
+  return api.get<ApiResponse<InstituteDashboardCharts>>("/institute/admin/dashboard/charts", { params: clean }).then(r => r.data.data);
+};
+
+// ── Institute Admin: Teachers ─────────────────────────────────────────────────
+export const getInstituteTeachers = () =>
+  api.get<ApiResponse<InstituteTeacherResponse[]>>("/institute/admin/teachers").then(r => r.data.data);
+
+export const createInstituteTeacher = (data: { name: string; email: string; phone: string; subject: string }) =>
+  api.post<ApiResponse<InstituteTeacherResponse>>("/institute/admin/teachers", data).then(r => r.data.data);
+
+export const toggleInstituteTeacherStatus = (id: string) =>
+  api.patch<ApiResponse<void>>(`/institute/admin/teachers/${id}/status`);
+
+export const deleteInstituteTeacher = (id: string) =>
+  api.delete<ApiResponse<void>>(`/institute/admin/teachers/${id}`);
+
+// ── Institute Admin: Students ─────────────────────────────────────────────────
+export const getInstituteStudents = () =>
+  api.get<ApiResponse<InstituteStudentResponse[]>>("/institute/admin/students").then(r => r.data.data);
+
+export const createInstituteStudent = (data: {
+  fullName: string; currentGrade: number; address?: string;
+  contacts: { contactName: string; phone: string; relationship: string; isPrimary: boolean }[];
+  classIds?: string[];
+}) => api.post<ApiResponse<InstituteStudentResponse>>("/institute/admin/students", data).then(r => r.data.data);
+
+export const updateInstituteStudent = (id: string, data: {
+  fullName: string; currentGrade: number; address?: string;
+  contacts: { contactName: string; phone: string; relationship: string; isPrimary: boolean }[];
+  classIds?: string[];
+}) => api.put<ApiResponse<InstituteStudentResponse>>(`/institute/admin/students/${id}`, data).then(r => r.data.data);
+
+export const toggleInstituteStudentStatus = (id: string) =>
+  api.patch<ApiResponse<void>>(`/institute/admin/students/${id}/status`);
+
+export const deleteInstituteStudent = (id: string) =>
+  api.delete<ApiResponse<void>>(`/institute/admin/students/${id}`);
+
+export const addInstituteStudentContact = (studentId: string, data: { contactName: string; phone: string; relationship: string; isPrimary: boolean }) =>
+  api.post<ApiResponse<InstituteStudentResponse>>(`/institute/admin/students/${studentId}/contacts`, data).then(r => r.data.data);
+
+export const updateInstituteStudentContact = (studentId: string, contactId: string, data: { contactName: string; phone: string; relationship: string; isPrimary: boolean }) =>
+  api.put<ApiResponse<InstituteStudentResponse>>(`/institute/admin/students/${studentId}/contacts/${contactId}`, data).then(r => r.data.data);
+
+export const deleteInstituteStudentContact = (studentId: string, contactId: string) =>
+  api.delete<ApiResponse<void>>(`/institute/admin/students/${studentId}/contacts/${contactId}`);
+
+export const getInstituteStudentAttendance = (studentId: string, params?: { from?: string; to?: string }) => {
+  const clean: Record<string, string> = {};
+  if (params?.from) clean.from = params.from;
+  if (params?.to) clean.to = params.to;
+  return api.get<ApiResponse<InstituteAttendanceRecord[]>>(`/institute/admin/students/${studentId}/attendance`, { params: clean }).then(r => r.data.data);
+};
+
+export const bulkImportInstituteStudents = (data: { students: { fullName: string; currentGrade: number; address?: string; parentName?: string; parentPhone?: string; parentRelationship?: string; classIds?: string[] }[] }) =>
+  api.post<ApiResponse<{ total: number; success: number; failed: number; errors: string[] }>>("/institute/admin/students/bulk-import", data).then(r => r.data.data);
+
+export const bulkAssignInstituteClasses = (data: { studentIds: string[]; classIds: string[] }) =>
+  api.post<ApiResponse<{ studentsProcessed: number; enrollmentsCreated: number; skippedDuplicates: number }>>("/institute/admin/students/bulk-assign-classes", data).then(r => r.data.data);
+
+// ── Institute Admin: Classes ──────────────────────────────────────────────────
+export const getInstituteClasses = () =>
+  api.get<ApiResponse<InstituteClassResponse[]>>("/institute/admin/classes").then(r => r.data.data);
+
+export const createInstituteClass = (data: {
+  name: string; grade: number; subject?: string;
+  instituteTeacherId?: string; classroomId?: string;
+  schedules?: { scheduleType: string; dayOfWeek?: number; sessionDate?: string; startTime: string; endTime: string }[];
+}) => api.post<ApiResponse<InstituteClassResponse>>("/institute/admin/classes", data).then(r => r.data.data);
+
+export const updateInstituteClass = (id: string, data: {
+  name: string; grade: number; subject?: string;
+  instituteTeacherId?: string; classroomId?: string;
+  schedules?: { scheduleType: string; dayOfWeek?: number; sessionDate?: string; startTime: string; endTime: string }[];
+}) => api.put<ApiResponse<InstituteClassResponse>>(`/institute/admin/classes/${id}`, data).then(r => r.data.data);
+
+export const toggleInstituteClassStatus = (id: string) =>
+  api.patch<ApiResponse<void>>(`/institute/admin/classes/${id}/status`);
+
+export const deleteInstituteClass = (id: string) =>
+  api.delete<ApiResponse<void>>(`/institute/admin/classes/${id}`);
+
+export const addInstituteClassSchedule = (classId: string, data: { scheduleType: string; dayOfWeek?: number; sessionDate?: string; startTime: string; endTime: string }) =>
+  api.post<ApiResponse<InstituteClassResponse>>(`/institute/admin/classes/${classId}/schedules`, data).then(r => r.data.data);
+
+export const deleteInstituteClassSchedule = (classId: string, scheduleId: string) =>
+  api.delete<ApiResponse<void>>(`/institute/admin/classes/${classId}/schedules/${scheduleId}`);
+
+// ── Institute Admin: Classrooms ───────────────────────────────────────────────
+export const getClassrooms = () =>
+  api.get<ApiResponse<ClassroomResponse[]>>("/institute/admin/classrooms").then(r => r.data.data);
+
+export const getAvailableClassrooms = (params: { scheduleType: string; dayOfWeek?: number; sessionDate?: string; startTime: string; endTime: string }) => {
+  const clean: Record<string, string | number> = { scheduleType: params.scheduleType, startTime: params.startTime, endTime: params.endTime };
+  if (params.dayOfWeek !== undefined) clean.dayOfWeek = params.dayOfWeek;
+  if (params.sessionDate) clean.sessionDate = params.sessionDate;
+  return api.get<ApiResponse<ClassroomResponse[]>>("/institute/admin/classrooms/available", { params: clean }).then(r => r.data.data);
+};
+
+export const createClassroom = (data: { name: string; capacity?: number; location?: string }) =>
+  api.post<ApiResponse<ClassroomResponse>>("/institute/admin/classrooms", data).then(r => r.data.data);
+
+export const updateClassroom = (id: string, data: { name: string; capacity?: number; location?: string }) =>
+  api.put<ApiResponse<ClassroomResponse>>(`/institute/admin/classrooms/${id}`, data).then(r => r.data.data);
+
+export const toggleClassroomStatus = (id: string) =>
+  api.patch<ApiResponse<void>>(`/institute/admin/classrooms/${id}/status`);
+
+export const deleteClassroom = (id: string) =>
+  api.delete<ApiResponse<void>>(`/institute/admin/classrooms/${id}`);
+
+// ── Institute Admin: Attendance ───────────────────────────────────────────────
+export const getInstituteAttendance = (params?: { from?: string; to?: string }) => {
+  const clean: Record<string, string> = {};
+  if (params?.from) clean.from = params.from;
+  if (params?.to) clean.to = params.to;
+  return api.get<ApiResponse<InstituteAttendanceRecord[]>>("/institute/admin/attendance", { params: clean }).then(r => r.data.data);
+};
+
+// ── Institute Admin: Sessions ─────────────────────────────────────────────────
+export const getInstituteSessions = (params?: { from?: string; to?: string }) => {
+  const clean: Record<string, string> = {};
+  if (params?.from) clean.from = params.from;
+  if (params?.to) clean.to = params.to;
+  return api.get<ApiResponse<InstituteSessionResponse[]>>("/institute/admin/sessions", { params: clean }).then(r => r.data.data);
+};
+
+export const cancelInstituteSession = (id: string, reason?: string) =>
+  api.post(`/institute/admin/sessions/${id}/cancel`, reason ? { reason } : {});
+
+// ── Institute Admin: Fees ─────────────────────────────────────────────────────
+export const getClassFees = (classId: string) =>
+  api.get<ApiResponse<ClassFeeResponse[]>>(`/institute/admin/classes/${classId}/fees`).then(r => r.data.data);
+
+export const setClassFee = (classId: string, data: { amount: number; feeLabel?: string }) =>
+  api.post<ApiResponse<ClassFeeResponse>>(`/institute/admin/classes/${classId}/fees`, data).then(r => r.data.data);
+
+export const getFeePayments = (yearMonth: string) =>
+  api.get<ApiResponse<FeePaymentResponse[]>>("/institute/admin/fees", { params: { yearMonth } }).then(r => r.data.data);
+
+export const updateFeePaymentStatus = (paymentId: string, data: { status: string; note?: string }) =>
+  api.patch<ApiResponse<FeePaymentResponse>>(`/institute/admin/fees/${paymentId}/status`, data).then(r => r.data.data);
+
+// ── Institute Teacher ─────────────────────────────────────────────────────────
+export const getInstituteTeacherDashboard = () =>
+  api.get<ApiResponse<InstituteTeacherDashboard>>("/institute/teacher/dashboard").then(r => r.data.data);
+
+export const getInstituteTeacherClasses = () =>
+  api.get<ApiResponse<InstituteClassResponse[]>>("/institute/teacher/classes").then(r => r.data.data);
+
+export const getInstituteTeacherAttendance = (params?: { from?: string; to?: string }) => {
+  const clean: Record<string, string> = {};
+  if (params?.from) clean.from = params.from;
+  if (params?.to) clean.to = params.to;
+  return api.get<ApiResponse<InstituteAttendanceRecord[]>>("/institute/teacher/attendance", { params: clean }).then(r => r.data.data);
+};
+
+export const markInstituteAttendance = (data: { studentCode: string; classId: string }) =>
+  api.post<ApiResponse<InstituteMarkAttendanceResponse>>("/institute/teacher/attendance/mark", data).then(r => r.data.data);
+
+export const getInstituteTeacherSessions = (params?: { from?: string; to?: string }) => {
+  const clean: Record<string, string> = {};
+  if (params?.from) clean.from = params.from;
+  if (params?.to) clean.to = params.to;
+  return api.get<ApiResponse<InstituteSessionResponse[]>>("/institute/teacher/sessions", { params: clean }).then(r => r.data.data);
+};
+
+export const cancelInstituteTeacherSession = (id: string, reason?: string) =>
+  api.post(`/institute/teacher/sessions/${id}/cancel`, reason ? { reason } : {});
 
 export default api;
