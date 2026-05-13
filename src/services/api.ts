@@ -436,8 +436,14 @@ export const getInstituteSessions = (params?: { from?: string; to?: string }) =>
   return api.get<ApiResponse<InstituteSessionResponse[]>>("/institute/admin/sessions", { params: clean }).then(r => r.data.data);
 };
 
+export const backfillInstituteSessions = () =>
+  api.post<ApiResponse<string>>("/institute/admin/sessions/backfill").then(r => r.data.data);
+
 export const cancelInstituteSession = (id: string, reason?: string) =>
   api.post(`/institute/admin/sessions/${id}/cancel`, reason ? { reason } : {});
+
+export const reactivateInstituteSession = (id: string, reason?: string) =>
+  api.post(`/institute/admin/sessions/${id}/reactivate`, reason ? { reason } : {});
 
 // ── Institute Admin: Fees ─────────────────────────────────────────────────────
 export const getClassFees = (classId: string) =>

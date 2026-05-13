@@ -384,6 +384,8 @@ export interface InstituteSessionResponse {
   startTime: string;
   endTime: string;
   status: string;
+  teacherName?: string;
+  subject?: string;
 }
 
 export interface ClassFeeResponse {

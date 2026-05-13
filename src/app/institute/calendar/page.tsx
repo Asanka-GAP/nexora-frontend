@@ -2,10 +2,10 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import {
     ChevronLeft, ChevronRight, Clock, MapPin, CalendarDays,
-    BookOpen, GraduationCap, Calendar, XCircle,
+    BookOpen, GraduationCap, Calendar, XCircle, RotateCcw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getInstituteSessions, cancelInstituteSession } from "@/services/api";
+import { getInstituteSessions, cancelInstituteSession, reactivateInstituteSession, backfillInstituteSessions } from "@/services/api";
 import type { InstituteSessionResponse } from "@/lib/types";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 import { useTheme } from "@/lib/theme";
@@ -71,12 +71,17 @@ export default function InstituteCalendarPage() {
     const dk = theme === "dark";
     const SS = STATUS_STYLES(dk);
 
-    const handleAction = async () => {
-        if (!selectedEvent || selectedEvent.status !== "UPCOMING") return;
+    const handleAction = async (type: "cancel" | "reactivate") => {
+        if (!selectedEvent) return;
         setActioning(true);
         try {
-            await cancelInstituteSession(selectedEvent.id, actionNote || undefined);
-            toast.success("Session cancelled");
+            if (type === "cancel") {
+                await cancelInstituteSession(selectedEvent.id, actionNote || undefined);
+                toast.success("Session cancelled");
+            } else {
+                await reactivateInstituteSession(selectedEvent.id, actionNote || undefined);
+                toast.success("Session reactivated");
+            }
             setSelectedEvent(null);
             setActionNote("");
             fetchSessions();
@@ -120,6 +125,12 @@ export default function InstituteCalendarPage() {
     }, [from, to]);
 
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
+
+    // One-time backfill on first load to generate sessions for existing schedules, then re-fetch
+    useEffect(() => {
+        backfillInstituteSessions().then(() => fetchSessions()).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const eventsByDate = useMemo(() => {
         const map: Record<string, InstituteSessionResponse[]> = {};
@@ -288,6 +299,12 @@ export default function InstituteCalendarPage() {
                                                                 </div>
                                                             )}
                                                         </div>
+                                                        {ev.teacherName && (
+                                                            <div className="flex items-center gap-1 mt-1">
+                                                                <BookOpen className="w-3 h-3 text-text-muted" />
+                                                                <span className="text-[11px] text-text-muted truncate">{ev.teacherName}{ev.subject ? ` · ${ev.subject}` : ""}</span>
+                                                            </div>
+                                                        )}
                                                     </motion.button>
                                                 );
                                             })
@@ -360,6 +377,12 @@ export default function InstituteCalendarPage() {
                                                             <div className="flex items-center gap-1 mt-1">
                                                                 <MapPin className="w-3 h-3 text-text-muted flex-shrink-0" />
                                                                 <p className="text-[10px] text-text-muted truncate">{ev.classroomName}</p>
+                                                            </div>
+                                                        )}
+                                                        {ev.teacherName && (
+                                                            <div className="flex items-center gap-1 mt-1">
+                                                                <BookOpen className="w-3 h-3 text-text-muted flex-shrink-0" />
+                                                                <p className="text-[10px] text-text-muted truncate">{ev.teacherName}</p>
                                                             </div>
                                                         )}
                                                         {ev.grade && (
@@ -509,6 +532,12 @@ export default function InstituteCalendarPage() {
                                                                     </div>
                                                                 )}
                                                             </div>
+                                                            {ev.teacherName && (
+                                                                <div className="flex items-center gap-1 mt-1">
+                                                                    <BookOpen className="w-3 h-3 text-text-muted" />
+                                                                    <span className="text-[11px] text-text-muted truncate">{ev.teacherName}{ev.subject ? ` · ${ev.subject}` : ""}</span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </motion.button>
                                                 );
@@ -661,6 +690,17 @@ export default function InstituteCalendarPage() {
                                                 </div>
                                             </div>
                                         )}
+                                        {selectedEvent.teacherName && (
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                                    <BookOpen className="w-4 h-4 text-indigo-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Teacher</p>
+                                                    <p className="text-sm font-semibold text-text">{selectedEvent.teacherName}{selectedEvent.subject ? ` · ${selectedEvent.subject}` : ""}</p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Status badge */}
@@ -672,7 +712,7 @@ export default function InstituteCalendarPage() {
                                     </div>
 
                                     {/* Action note + buttons */}
-                                    {selectedEvent.status === "UPCOMING" && (
+                                    {(selectedEvent.status === "UPCOMING" || selectedEvent.status === "CANCELLED") && (
                                         <div className="mt-4 space-y-3">
                                             <div>
                                                 <label className="block text-xs font-semibold text-text-muted mb-1.5">
@@ -682,7 +722,7 @@ export default function InstituteCalendarPage() {
                                                     value={actionNote}
                                                     onChange={e => setActionNote(e.target.value)}
                                                     rows={2}
-                                                    placeholder="Reason for cancellation..."
+                                                    placeholder={selectedEvent.status === "UPCOMING" ? "Reason for cancellation..." : "Reason for reactivation..."}
                                                     className="w-full px-3 py-2.5 rounded-xl border border-border text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none bg-bg"
                                                 />
                                             </div>
@@ -691,18 +731,28 @@ export default function InstituteCalendarPage() {
                                                     onClick={() => { setSelectedEvent(null); setActionNote(""); }}
                                                     className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-text-muted hover:bg-bg transition-all"
                                                 >Close</button>
-                                                <button
-                                                    onClick={handleAction}
-                                                    disabled={actioning}
-                                                    className="flex-1 h-10 rounded-xl text-sm font-semibold text-white bg-danger hover:bg-danger/90 transition-all disabled:opacity-60 flex items-center justify-center gap-1.5"
-                                                >
-                                                    <XCircle className="w-4 h-4" />{actioning ? "Cancelling..." : "Cancel Session"}
-                                                </button>
+                                                {selectedEvent.status === "UPCOMING" ? (
+                                                    <button
+                                                        onClick={() => handleAction("cancel")}
+                                                        disabled={actioning}
+                                                        className="flex-1 h-10 rounded-xl text-sm font-semibold text-white bg-danger hover:bg-danger/90 transition-all disabled:opacity-60 flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <XCircle className="w-4 h-4" />{actioning ? "Cancelling..." : "Cancel Session"}
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleAction("reactivate")}
+                                                        disabled={actioning}
+                                                        className="flex-1 h-10 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-all disabled:opacity-60 flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <RotateCcw className="w-4 h-4" />{actioning ? "Reactivating..." : "Reactivate"}
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     )}
 
-                                    {selectedEvent.status !== "UPCOMING" && (
+                                    {selectedEvent.status === "COMPLETED" && (
                                         <button
                                             onClick={() => setSelectedEvent(null)}
                                             className="w-full mt-4 py-3 rounded-xl text-sm font-bold text-text-muted bg-bg border border-border hover:bg-bg-card transition-all"

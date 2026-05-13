@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Camera, CameraOff, CheckCircle2, ChevronDown, XCircle, Clock, WifiOff, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
-import { markAttendance, getClasses } from "@/services/api";
+import { markAttendance, getClasses, getSchedules } from "@/services/api";
 import type { ClassItem } from "@/lib/types";
 import jsQR from "jsqr";
 import { loadTodayCache, saveTodayCache, getOfflineQueue, addToOfflineQueue, clearOfflineQueue } from "@/lib/offlineScan";
@@ -16,18 +16,20 @@ interface ScanFeedback { type: "success" | "error"; name: string; message: strin
 
 function findActiveClass(classes: ClassItem[]): ClassItem | null {
   const now = new Date();
-  const currentDay = now.getDay(); // 0=Sun, 6=Sat
+  const currentDay = now.getDay();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const toMinutes = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
   return classes.find(cls =>
+    cls.isActive &&
     cls.schedules?.some(s => {
-      if (s.scheduleType === "WEEKLY" && s.dayOfWeek !== currentDay) return false;
-      if (s.scheduleType === "ONETIME") {
-        if (!s.sessionDate) return false;
-        const d = new Date(s.sessionDate);
-        if (d.getFullYear() !== now.getFullYear() || d.getMonth() !== now.getMonth() || d.getDate() !== now.getDate()) return false;
-      }
-      return currentMinutes >= toMinutes(s.startTime) && currentMinutes <= toMinutes(s.endTime);
+      const start = toMinutes(s.startTime);
+      const end = toMinutes(s.endTime);
+      if (currentMinutes < start || currentMinutes > end) return false;
+      if (s.scheduleType === "WEEKLY") return s.dayOfWeek === currentDay;
+      if (s.scheduleType === "ONE_TIME" || s.scheduleType === "ONETIME") return s.sessionDate === todayStr;
+      return false;
     })
   ) ?? null;
 }
@@ -113,16 +115,21 @@ export default function ScannerPage() {
   });
 
   useEffect(() => {
-    getClasses().then(c => {
-      setClasses(c);
-      if (!c.length) return;
-      const active = findActiveClass(c);
-      if (active) {
-        updateSelectedClass(active.id, true);
-      } else {
-        updateSelectedClass(c[0].id, false);
-      }
-    }).catch(() => {});
+    const todayStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
+    Promise.all([getClasses(), getSchedules({ from: todayStr, to: todayStr, status: "UPCOMING" })])
+      .then(([classList, todaySessions]) => {
+        setClasses(classList);
+        if (!classList.length) return;
+        // Only consider classes that have an UPCOMING session today
+        const classIdsWithSession = new Set(todaySessions.map(s => s.classId));
+        const activeWithSession = classList.filter(c => classIdsWithSession.has(c.id));
+        const active = findActiveClass(activeWithSession.length ? activeWithSession : classList);
+        if (active) {
+          updateSelectedClass(active.id, true);
+        } else {
+          updateSelectedClass(classList[0].id, false);
+        }
+      }).catch(() => {});
   }, []);
 
   const onQrDetected = useCallback((decodedText: string) => {

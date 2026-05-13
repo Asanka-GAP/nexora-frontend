@@ -8,7 +8,7 @@ import { toPng } from "html-to-image";
 import { useAuth } from "@/lib/auth";
 import { getIdCardDesign } from "@/services/api";
 import { CardDesign, DEFAULT_DESIGN, CARD_W, CARD_H } from "@/components/id-card/types";
-import { renderCardHtml, renderCardPrintStyles, renderCardInnerHtml, resolveContent } from "@/components/id-card/renderer";
+import { renderCardHtml, renderCardPrintStyles, renderCardInnerHtml, resolveContent, renderBulkCardsHtml, renderBulkCardPrintStyles } from "@/components/id-card/renderer";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useFetch } from "@/hooks/useFetch";
@@ -37,6 +37,10 @@ export default function StudentsPage() {
   const [search, setSearch] = useState("");
   const [filterGrade, setFilterGrade] = useState<number | "ALL">("ALL");
   const [filterStatus, setFilterStatus] = useState<StatusFilter>("ALL");
+  const [filterClassId, setFilterClassId] = useState<string | "ALL">("ALL");
+  const [gradeDropdownOpen, setGradeDropdownOpen] = useState(false);
+  const [classFilterDropdownOpen, setClassFilterDropdownOpen] = useState(false);
+  const [classFilterSearch, setClassFilterSearch] = useState("");
   const [page, setPage] = useState(1);
 
   // Create/Edit
@@ -160,24 +164,36 @@ ${cardHtml(qrStudent, qrDataUrl)}
   const cardHtml = (s: Student, qrUrl: string) => renderCardHtml(cardDesign, getStudentData(s), qrUrl);
 
   const printBulkCards = async () => {
-    const activeStudents = filtered.filter(s => s.isActive);
-    if (!activeStudents.length) { toast.error("No active students to print"); return; }
+    const pool = selectedStudentIds.size > 0
+      ? all.filter(s => selectedStudentIds.has(s.id) && s.isActive)
+      : filtered.filter(s => s.isActive);
+    if (!pool.length) {
+      toast.error(selectedStudentIds.size > 0 ? "No active students in selection" : "No active students match current filters");
+      return;
+    }
+    const printTitle = selectedStudentIds.size > 0
+      ? `${pool.length} Selected Students`
+      : filterClassId !== "ALL"
+        ? `${(classes ?? []).find(c => c.id === filterClassId)?.name ?? "Class"} – ${pool.length} Students`
+        : filterGrade !== "ALL"
+          ? `Grade ${filterGrade} – ${pool.length} Students`
+          : `All Active Students – ${pool.length}`;
     setBulkCardsPrinting(true);
     try {
       const qrUrls = await Promise.all(
-        activeStudents.map(s => QRCode.toDataURL(s.studentCode, { width: 200, margin: 1, color: { dark: "#111827", light: "#ffffff" } }))
+        pool.map(s => QRCode.toDataURL(s.studentCode, { width: 200, margin: 1, color: { dark: "#111827", light: "#ffffff" } }))
       );
       const printWindow = window.open("", "_blank");
       if (!printWindow) { toast.error("Popup blocked"); return; }
-      const cards = activeStudents.map((s, i) => cardHtml(s, qrUrls[i])).join("\n");
-      printWindow.document.write(`<html><head><title>Bulk ID Cards - ${activeStudents.length} Students</title>${cardPrintStyles()}</head><body>${cards}</body></html>`);
+      const students = pool.map((s, i) => ({ data: getStudentData(s), qrUrl: qrUrls[i] }));
+      printWindow.document.write(`<html><head><title>ID Cards – ${printTitle}</title>${renderBulkCardPrintStyles()}</head><body>${renderBulkCardsHtml(cardDesign, students)}</body></html>`);
       printWindow.document.close();
       printWindow.onload = () => { setTimeout(() => { printWindow.print(); printWindow.close(); }, 800); };
     } catch { toast.error("Failed to generate cards"); }
     finally { setBulkCardsPrinting(false); }
   };
 
-  useEffect(() => { setPage(1); }, [search, filterGrade, filterStatus]);
+  useEffect(() => { setPage(1); }, [search, filterGrade, filterStatus, filterClassId]);
 
   const all = students ?? [];
   const grades = [...new Set(all.map(s => s.currentGrade))].sort((a, b) => a - b);
@@ -186,6 +202,7 @@ ${cardHtml(qrStudent, qrDataUrl)}
     if (filterGrade !== "ALL" && s.currentGrade !== filterGrade) return false;
     if (filterStatus === "ACTIVE" && !s.isActive) return false;
     if (filterStatus === "INACTIVE" && s.isActive) return false;
+    if (filterClassId !== "ALL" && !s.enrolledClasses?.some(c => c.id === filterClassId)) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return s.fullName.toLowerCase().includes(q) || s.studentCode.toLowerCase().includes(q) || (s.address?.toLowerCase().includes(q));
@@ -353,31 +370,99 @@ ${cardHtml(qrStudent, qrDataUrl)}
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           <div className="relative flex-1">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, code, address..." className="w-full pl-10 pr-4 py-2.5 border border-border rounded-xl text-sm text-text bg-bg-card placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+            <input value={search} onChange={e => setSearch(e.target.value)} onFocus={() => { setGradeDropdownOpen(false); setClassFilterDropdownOpen(false); }} placeholder="Search by name, code, address..." className="w-full pl-10 pr-4 py-2.5 border border-border rounded-xl text-sm text-text bg-bg-card placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
           </div>
-          {(search || filterGrade !== "ALL" || filterStatus !== "ALL") && (
+          {(search || filterGrade !== "ALL" || filterStatus !== "ALL" || filterClassId !== "ALL") && (
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-[11px] font-medium text-text-muted">{filtered.length} found</span>
-              <button onClick={() => { setSearch(""); setFilterGrade("ALL"); setFilterStatus("ALL"); }} className="text-[11px] font-semibold text-primary hover:underline">Clear all</button>
+              <button onClick={() => { setSearch(""); setFilterGrade("ALL"); setFilterStatus("ALL"); setFilterClassId("ALL"); }} className="text-[11px] font-semibold text-primary hover:underline">Clear all</button>
             </div>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-3 mt-3">
+        <div className="flex flex-wrap items-center gap-2 mt-3">
           <div className="flex items-center bg-slate-100/80 rounded-xl p-0.5">
-          {(["ALL", "ACTIVE", "INACTIVE"] as StatusFilter[]).map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)} className={`relative px-3.5 py-1.5 rounded-[10px] text-xs font-semibold transition-all whitespace-nowrap ${filterStatus === s ? "text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`} style={filterStatus === s ? { background: s === "INACTIVE" ? "linear-gradient(135deg, #EF4444, #DC2626)" : s === "ACTIVE" ? "linear-gradient(135deg, #10B981, #059669)" : "linear-gradient(135deg, #4F46E5, #3730A3)" } : {}}>
-              {s === "ALL" ? "All" : s === "ACTIVE" ? "● Active" : "● Inactive"}
-            </button>
-          ))}
-          </div>
-          {grades.length > 1 && (<>
-            <div className="w-px h-5 bg-slate-200 hidden sm:block" />
-            <div className="flex items-center bg-slate-100/80 rounded-xl p-0.5">
-            {(["ALL" as const, ...grades]).map(g => (
-              <button key={g} onClick={() => setFilterGrade(g)} className={`px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all whitespace-nowrap ${filterGrade === g ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>{g === "ALL" ? "All" : `G${g}`}</button>
+            {(["ALL", "ACTIVE", "INACTIVE"] as StatusFilter[]).map(s => (
+              <button key={s} onClick={() => setFilterStatus(s)} className={`relative px-3.5 py-1.5 rounded-[10px] text-xs font-semibold transition-all whitespace-nowrap ${filterStatus === s ? "text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`} style={filterStatus === s ? { background: s === "INACTIVE" ? "linear-gradient(135deg, #EF4444, #DC2626)" : s === "ACTIVE" ? "linear-gradient(135deg, #10B981, #059669)" : "linear-gradient(135deg, #4F46E5, #3730A3)" } : {}}>
+                {s === "ALL" ? "All" : s === "ACTIVE" ? "● Active" : "● Inactive"}
+              </button>
             ))}
+          </div>
+          {grades.length > 1 && (
+            <div className="relative w-[calc(50%-4px)] sm:w-auto">
+              <button type="button" onClick={() => { setGradeDropdownOpen(o => !o); setClassFilterDropdownOpen(false); }}
+                className={`w-full flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all ${
+                  filterGrade !== "ALL" ? "border-primary/40 bg-primary/5 text-primary" : "border-border bg-bg-card text-slate-500 hover:text-slate-700 hover:border-primary/30"
+                }`}>
+                <GraduationCap className="w-3.5 h-3.5" />
+                {filterGrade === "ALL" ? "Grade" : `Grade ${filterGrade}`}
+                <ChevronDown className={`w-3 h-3 transition-transform ${gradeDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+              <AnimatePresence>
+                {gradeDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setGradeDropdownOpen(false)} />
+                    <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.13 }}
+                      className="absolute left-0 top-full mt-1.5 z-40 bg-bg-card rounded-xl border border-border shadow-xl overflow-hidden min-w-[130px]">
+                      <div className="p-1.5">
+                        <button onClick={() => { setFilterGrade("ALL"); setGradeDropdownOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                            filterGrade === "ALL" ? "bg-primary/10 text-primary" : "text-text hover:bg-bg"
+                          }`}>All Grades</button>
+                        {grades.map(g => (
+                          <button key={g} onClick={() => { setFilterGrade(g); setGradeDropdownOpen(false); }}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                              filterGrade === g ? "bg-primary/10 text-primary" : "text-text hover:bg-bg"
+                            }`}>Grade {g}</button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
-          </>)}
+          )}
+          {(classes ?? []).length > 0 && (
+            <div className="relative w-[calc(50%-4px)] sm:w-auto">
+              <button type="button" onClick={() => { setClassFilterDropdownOpen(o => !o); setGradeDropdownOpen(false); setClassFilterSearch(""); }}
+                className={`w-full flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all ${
+                  filterClassId !== "ALL" ? "border-indigo-400/50 bg-indigo-50 text-indigo-700" : "border-border bg-bg-card text-slate-500 hover:text-slate-700 hover:border-primary/30"
+                }`}>
+                <BookOpen className="w-3.5 h-3.5" />
+                {filterClassId === "ALL" ? "Class" : ((classes ?? []).find(c => c.id === filterClassId)?.name ?? "Class")}
+                <ChevronDown className={`w-3 h-3 transition-transform ${classFilterDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+              <AnimatePresence>
+                {classFilterDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => { setClassFilterDropdownOpen(false); setClassFilterSearch(""); }} />
+                    <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.13 }}
+                      className="absolute left-0 top-full mt-1.5 z-40 bg-bg-card rounded-xl border border-border shadow-xl overflow-hidden min-w-[180px]">
+                      <div className="p-2 border-b border-border">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+                          <input value={classFilterSearch} onChange={e => setClassFilterSearch(e.target.value)}
+                            placeholder="Search classes..." autoFocus
+                            className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-border bg-bg text-xs text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                        </div>
+                      </div>
+                      <div className="max-h-[200px] overflow-y-auto p-1.5">
+                        <button onClick={() => { setFilterClassId("ALL"); setClassFilterDropdownOpen(false); setClassFilterSearch(""); }}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                            filterClassId === "ALL" ? "bg-indigo-50 text-indigo-700" : "text-text hover:bg-bg"
+                          }`}>All Classes</button>
+                        {(classes ?? []).filter(c => !classFilterSearch.trim() || c.name.toLowerCase().includes(classFilterSearch.toLowerCase())).map(c => (
+                          <button key={c.id} onClick={() => { setFilterClassId(c.id); setClassFilterDropdownOpen(false); setClassFilterSearch(""); }}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                              filterClassId === c.id ? "bg-indigo-50 text-indigo-700" : "text-text hover:bg-bg"
+                            }`}>{c.name}</button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
       </div>
 
@@ -388,7 +473,10 @@ ${cardHtml(qrStudent, qrDataUrl)}
             <span className="text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg">{selectedStudentIds.size} selected</span>
             <button onClick={() => setSelectedStudentIds(new Set())} className="text-xs font-semibold text-text-muted hover:text-text">Clear</button>
           </div>
-          <Button size="sm" onClick={() => { setBulkAssignOpen(true); setBulkAssignClassIds([]); setBulkAssignClassDropdown(false); setBulkAssignClassSearch(""); }} className="text-xs"><Layers className="h-3.5 w-3.5" /> Assign Classes</Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={printBulkCards} loading={bulkCardsPrinting} className="text-xs"><Printer className="h-3.5 w-3.5" /> Print Cards</Button>
+            <Button size="sm" onClick={() => { setBulkAssignOpen(true); setBulkAssignClassIds([]); setBulkAssignClassDropdown(false); setBulkAssignClassSearch(""); }} className="text-xs"><Layers className="h-3.5 w-3.5" /> Assign Classes</Button>
+          </div>
         </motion.div>
       )}
 
